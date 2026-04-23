@@ -1,0 +1,35 @@
+# Production Docker Compose Override
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: production
+    environment:
+      - NODE_ENV=production
+    restart: always
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        BUILD_MODE: production
+    environment:
+      - DEBUG=false
+    restart: always
+
+  celery_worker:
+    restart: always
+
+  celery_beat:
+    restart: always
+
+  db:
+    restart: always
+
+  redis:
+    restart: always

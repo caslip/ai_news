@@ -1,0 +1,164 @@
+# AI News Aggregator - Docker Compose Configuration
+# Usage: 
+#   Development: docker-compose up -d
+#   Production: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  # Frontend (Next.js)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ai-news-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - NEXT_PUBLIC_API_URL=${API_URL:-http://backend:8000}
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - ai-news-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Backend (FastAPI)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ai-news-backend
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ai_news}:${POSTGRES_PASSWORD:-ai_news_password}@db:5432/${POSTGRES_DB:-ai_news}
+      - DATABASE_URL_ASYNC=postgresql+asyncpg://${POSTGRES_USER:-ai_news}:${POSTGRES_PASSWORD:-ai_news_password}@db:5432/${POSTGRES_DB:-ai_news}
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-strong-random-key}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://frontend:3000}
+      - TWITTER_BEARER_TOKEN=${TWITTER_BEARER_TOKEN}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME}
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - ai-news-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || wget -qO- http://localhost:8000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Celery Worker
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ai-news-celery-worker
+    command: celery -A app.celery_app worker --loglevel=${CELERY_LOG_LEVEL:-info} --concurrency=${CELERY_CONCURRENCY:-2}
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ai_news}:${POSTGRES_PASSWORD:-ai_news_password}@db:5432/${POSTGRES_DB:-ai_news}
+      - DATABASE_URL_ASYNC=postgresql+asyncpg://${POSTGRES_USER:-ai_news}:${POSTGRES_PASSWORD:-ai_news_password}@db:5432/${POSTGRES_DB:-ai_news}
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-strong-random-key}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - TWITTER_BEARER_TOKEN=${TWITTER_BEARER_TOKEN}
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - ai-news-network
+
+  # Celery Beat (Scheduler)
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ai-news-celery-beat
+    command: celery -A app.celery_app beat --loglevel=${CELERY_LOG_LEVEL:-info}
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ai_news}:${POSTGRES_PASSWORD:-ai_news_password}@db:5432/${POSTGRES_DB:-ai_news}
+      - DATABASE_URL_ASYNC=postgresql+asyncpg://${POSTGRES_USER:-ai_news}:${POSTGRES_PASSWORD:-ai_news_password}@db:5432/${POSTGRES_DB:-ai_news}
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - ai-news-network
+
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: ai-news-db
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-ai_news}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ai_news_password}
+      - POSTGRES_DB=${POSTGRES_DB:-ai_news}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    restart: unless-stopped
+    networks:
+      - ai-news-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ai_news} -d ${POSTGRES_DB:-ai_news}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Redis Cache & Message Queue
+  redis:
+    image: redis:7-alpine
+    container_name: ai-news-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redisdata:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    restart: unless-stopped
+    networks:
+      - ai-news-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  ai-news-network:
+    driver: bridge
+
+volumes:
+  pgdata:
+    driver: local
+  redisdata:
+    driver: local
