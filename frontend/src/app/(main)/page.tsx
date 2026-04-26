@@ -7,13 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { XTweetCard } from "@/components/XTweetCard";
 import {
   MessageSquare,
   Heart,
@@ -242,7 +236,7 @@ function ArticleCard({ article, onBookmark }: { article: Article; onBookmark?: (
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <Badge variant="outline" className={`${typeConfig.color} ${typeConfig.bg} border-0 text-xs`}>
-                {isGitHub ? "GITHUB" : article.source_type.toUpperCase()}
+                {isGitHub ? "GITHUB" : (article.source_type?.toUpperCase() || "ARTICLE")}
               </Badge>
               <span className="text-xs text-muted-foreground font-mono">{article.source_name}</span>
               {isGitHub && meta?.language && (
@@ -488,6 +482,33 @@ export default function HomePage() {
     },
   });
 
+  // 获取 X / Twitter 热门推文
+  const { data: tweetsData, isLoading: tweetsLoading } = useQuery({
+    queryKey: ["x-tweets"],
+    queryFn: async () => {
+      try {
+        const response = await apiClient.get<ArticleListResponse>("/api/articles", {
+          params: {
+            source_type: "twitter,nitter",
+            sort: "hot",
+            page_size: 8,
+            time_range: "week",
+          },
+        });
+        return response.data;
+      } catch (error) {
+        console.error("Failed to fetch X tweets:", error);
+        return {
+          items: [],
+          total: 0,
+          page: 1,
+          page_size: 8,
+          total_pages: 0,
+        } as ArticleListResponse;
+      }
+    },
+  });
+
   // 收藏文章
   const handleBookmark = async (articleId: string) => {
     if (!isAuthenticated) {
@@ -505,7 +526,15 @@ export default function HomePage() {
 
   // 判断是否显示 GitHub Trending
   const showTrending = sourceFilter === "all" || sourceFilter === "github";
-  const isLoading = articlesLoading || (showTrending && trendingLoading);
+  // 判断是否显示 X 推文
+  const showXTweets = sourceFilter === "all" || sourceFilter === "twitter" || sourceFilter === "nitter";
+  const isLoading = articlesLoading || (showTrending && trendingLoading) || (showXTweets && tweetsLoading);
+
+  // 判断是否有任何数据（根据筛选条件选择正确的判断逻辑）
+  const hasArticles = sourceFilter === "twitter" || sourceFilter === "nitter"
+    ? (tweetsData?.items?.length ?? 0) > 0
+    : (articlesData?.items?.length ?? 0) > 0;
+  const hasAnyData = hasArticles || (showTrending && (trendingData?.repos?.length ?? 0) > 0);
 
   return (
     <div className="flex flex-col h-full">
@@ -529,56 +558,74 @@ export default function HomePage() {
         <StatsCards stats={statsData} />
 
         {/* Filters */}
-        <Card className="mt-6">
-          <CardContent className="pt-6">
-            <div className="flex flex-col md:flex-row gap-4">
+        <Card className="sticky top-0 z-20 mt-6 backdrop-blur bg-card/80">
+          <CardContent className="pt-4 pb-4">
+            <div className="flex flex-col lg:flex-row gap-3">
               {/* Search */}
-              <div className="relative flex-1">
+              <div className="relative flex-1 min-w-0">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="搜索资讯标题或内容..."
+                  placeholder="搜索资讯..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
+                  className="pl-9 h-9"
                 />
               </div>
 
-              {/* Time Range */}
-              <Select value={timeRange} onValueChange={(v) => { setTimeRange(v); setPage(1); }}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="时间范围" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="today">今日</SelectItem>
-                  <SelectItem value="week">本周</SelectItem>
-                  <SelectItem value="month">本月</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* Filter selects in one row */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {/* Time Range */}
+                <select
+                  value={timeRange}
+                  onChange={(e) => { setTimeRange(e.target.value); setPage(1); }}
+                  className="h-9 px-3 pr-8 rounded-md border border-input bg-background text-xs text-foreground cursor-pointer transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-ring appearance-none hover:border-ring/50"
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                    backgroundPosition: 'right 0.5rem center',
+                    backgroundRepeat: 'no-repeat',
+                    backgroundSize: '1.5em 1.5em',
+                  }}
+                >
+                  <option value="today">今日</option>
+                  <option value="week">本周</option>
+                  <option value="month">本月</option>
+                </select>
 
-              {/* Source Filter */}
-              <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setPage(1); }}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="信源" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部信源</SelectItem>
-                  <SelectItem value="rss">RSS</SelectItem>
-                  <SelectItem value="twitter">X / Twitter</SelectItem>
-                  <SelectItem value="github">GitHub</SelectItem>
-                  <SelectItem value="netter">Nitter</SelectItem>
-                </SelectContent>
-              </Select>
+                {/* Source Filter */}
+                <select
+                  value={sourceFilter}
+                  onChange={(e) => { setSourceFilter(e.target.value); setPage(1); }}
+                  className="h-9 px-3 pr-8 rounded-md border border-input bg-background text-xs text-foreground cursor-pointer transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-ring appearance-none hover:border-ring/50"
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                    backgroundPosition: 'right 0.5rem center',
+                    backgroundRepeat: 'no-repeat',
+                    backgroundSize: '1.5em 1.5em',
+                  }}
+                >
+                  <option value="all">全部信源</option>
+                  <option value="rss">RSS</option>
+                  <option value="twitter">X / Twitter</option>
+                  <option value="github">GitHub</option>
+                  <option value="nitter">Nitter</option>
+                </select>
 
-              {/* Sort */}
-              <Select value={sortBy} onValueChange={(v) => { setSortBy(v); setPage(1); }}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="排序" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="hot">热度排序</SelectItem>
-                  <SelectItem value="time">时间排序</SelectItem>
-                </SelectContent>
-              </Select>
+                {/* Sort */}
+                <select
+                  value={sortBy}
+                  onChange={(e) => { setSortBy(e.target.value); setPage(1); }}
+                  className="h-9 px-3 pr-8 rounded-md border border-input bg-background text-xs text-foreground cursor-pointer transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-ring appearance-none hover:border-ring/50"
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                    backgroundPosition: 'right 0.5rem center',
+                    backgroundRepeat: 'no-repeat',
+                    backgroundSize: '1.5em 1.5em',
+                  }}
+                >
+                  <option value="hot">热度</option>
+                  <option value="time">时间</option>
+                </select>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -621,8 +668,40 @@ export default function HomePage() {
                 </>
               )}
 
+              {/* X / Twitter 热门推文 Section */}
+              {showXTweets && tweetsData && tweetsData.items.length > 0 && (
+                <>
+                  {/* X Tweets Section Header */}
+                  <div className="flex items-center gap-2 py-2">
+                    <Badge variant="outline" className="bg-sky-500/10 text-sky-500 border-sky-500/30">
+                      <svg className="h-3 w-3 mr-1" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                      </svg>
+                      X / Twitter 热点
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      本周热门推文 · {tweetsData.total} 条
+                    </span>
+                  </div>
+
+                  {/* X Tweet Cards Grid */}
+                  <div className="grid grid-cols-1 gap-4">
+                    {tweetsData.items.slice(0, 8).map((tweet) => (
+                      <XTweetCard
+                        key={tweet.id}
+                        tweet={tweet}
+                        onBookmark={handleBookmark}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Divider */}
+                  <div className="border-t my-6" />
+                </>
+              )}
+
               {/* Articles Section */}
-              {articlesData?.items.length === 0 && !showTrending ? (
+              {isLoading ? null : !hasAnyData ? (
                 <Card className="py-12">
                   <CardContent className="text-center">
                     <Filter className="h-12 w-12 mx-auto text-muted-foreground mb-4" />

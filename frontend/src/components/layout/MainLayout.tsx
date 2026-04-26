@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useState, useEffect } from "react";
 import { Sidebar } from "./Sidebar";
 import { NotificationToastContainer } from "@/components/NotificationToast";
 import { cn } from "@/lib/utils";
@@ -13,7 +12,15 @@ export default function MainLayout({
   children: React.ReactNode;
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const { user } = useAuthStore();
+  const { user, fetchCurrentUser } = useAuthStore();
+
+  // 页面加载时同步用户状态（只在有 token 但没有 user 时请求）
+  useEffect(() => {
+    const { token, user, fetchCurrentUser } = useAuthStore.getState();
+    if (token && !user) {
+      void fetchCurrentUser();
+    }
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">

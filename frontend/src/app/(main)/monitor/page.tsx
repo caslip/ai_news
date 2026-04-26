@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,75 +25,19 @@ import {
   Trash2,
   RefreshCw,
   Loader2,
-  Clock,
-  Search,
   Bell,
   BellOff,
 } from "lucide-react";
 
-interface MonitorKeyword {
+interface MonitorItem {
   id: string;
-  keyword: string;
+  name: string;
+  value: string;
+  config: { keyword?: string; account?: string; username?: string; params?: Record<string, unknown> };
   is_active: boolean;
+  monitor_type?: string;
+  type?: string;
 }
-
-interface MonitorAccount {
-  id: string;
-  account: string;
-  is_active: boolean;
-}
-
-interface MonitorArticle {
-  id: string;
-  title: string;
-  url: string;
-  author: string;
-  matched_keyword?: string;
-  published_at: string;
-  fetched_at: string;
-}
-
-const mockKeywords: MonitorKeyword[] = [
-  { id: "1", keyword: "GPT-5", is_active: true },
-  { id: "2", keyword: "Llama 4", is_active: true },
-  { id: "3", keyword: "Claude 3.7", is_active: true },
-  { id: "4", keyword: "AI Agent", is_active: false },
-];
-
-const mockAccounts: MonitorAccount[] = [
-  { id: "1", account: "@karpathy", is_active: true },
-  { id: "2", account: "@ylecun", is_active: true },
-  { id: "3", account: "@sama", is_active: false },
-];
-
-const mockArticles: MonitorArticle[] = [
-  {
-    id: "1",
-    title: "GPT-5 震撼发布！OpenAI 开启 AGI 新纪元",
-    url: "https://twitter.com/example/status/1",
-    author: "@sama",
-    matched_keyword: "GPT-5",
-    published_at: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-    fetched_at: new Date(Date.now() - 1000 * 60 * 3).toISOString(),
-  },
-  {
-    id: "2",
-    title: "Andrej Karpathy 教你从零实现 GPT-2",
-    url: "https://twitter.com/karpathy/status/2",
-    author: "@karpathy",
-    published_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-    fetched_at: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
-  },
-  {
-    id: "3",
-    title: "Meta 开源 Llama 4，性能超越 GPT-4",
-    url: "https://twitter.com/ylecun/status/3",
-    author: "@ylecun",
-    matched_keyword: "Llama 4",
-    published_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-    fetched_at: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
-  },
-];
 
 export default function MonitorPage() {
   const [isEnabled, setIsEnabled] = useState(true);
@@ -101,27 +45,28 @@ export default function MonitorPage() {
   const [newAccount, setNewAccount] = useState("");
   const [isAddKeywordDialogOpen, setIsAddKeywordDialogOpen] = useState(false);
   const [isAddAccountDialogOpen, setIsAddAccountDialogOpen] = useState(false);
-  const [sseConnected, setSseConnected] = useState(false);
   const queryClient = useQueryClient();
 
-  useEffect(() => {
-    // 模拟 SSE 连接状态
-    const timer = setTimeout(() => setSseConnected(true), 1000);
-    return () => clearTimeout(timer);
-  }, []);
+  // ─── 关键词 CRUD ──────────────────────────────────────────────
 
-  const { data: articles, isLoading } = useQuery({
-    queryKey: ["monitor-articles"],
+  const { data: keywords = [], isLoading: keywordsLoading } = useQuery<MonitorItem[]>({
+    queryKey: ["monitor-keywords"],
     queryFn: async () => {
-      await new Promise((r) => setTimeout(r, 300));
-      return mockArticles;
+      const { apiClient } = await import("@/lib/api");
+      const response = await apiClient.get("/api/monitor/keywords");
+      return response.data || [];
     },
   });
 
   const addKeywordMutation = useMutation({
-    mutationFn: async (keyword: string) => {
-      await new Promise((r) => setTimeout(r, 300));
-      return { id: Math.random().toString(), keyword, is_active: true };
+    mutationFn: async (name: string) => {
+      const { apiClient } = await import("@/lib/api");
+      const response = await apiClient.post("/api/monitor/keywords", {
+        name,
+        value: name,
+        is_active: true,
+      });
+      return response.data;
     },
     onSuccess: () => {
       setIsAddKeywordDialogOpen(false);
@@ -130,10 +75,47 @@ export default function MonitorPage() {
     },
   });
 
+  const deleteKeywordMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { apiClient } = await import("@/lib/api");
+      await apiClient.delete(`/api/monitor/keywords/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["monitor-keywords"] });
+    },
+  });
+
+  const toggleKeywordMutation = useMutation({
+    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
+      const { apiClient } = await import("@/lib/api");
+      await apiClient.put(`/api/monitor/keywords/${id}`, { is_active });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["monitor-keywords"] });
+    },
+  });
+
+  // ─── 账号 CRUD ──────────────────────────────────────────────
+
+  const { data: accounts = [], isLoading: accountsLoading } = useQuery<MonitorItem[]>({
+    queryKey: ["monitor-accounts"],
+    queryFn: async () => {
+      const { apiClient } = await import("@/lib/api");
+      const response = await apiClient.get("/api/monitor/accounts");
+      return response.data || [];
+    },
+  });
+
   const addAccountMutation = useMutation({
-    mutationFn: async (account: string) => {
-      await new Promise((r) => setTimeout(r, 300));
-      return { id: Math.random().toString(), account, is_active: true };
+    mutationFn: async ({ name, value }: { name: string; value: string }) => {
+      const { apiClient } = await import("@/lib/api");
+      const response = await apiClient.post("/api/monitor/accounts", {
+        name,
+        value,
+        is_active: true,
+        monitor_type: "nitter",  // 默认创建为 Nitter 类型，统一由 X 监控管理
+      });
+      return response.data;
     },
     onSuccess: () => {
       setIsAddAccountDialogOpen(false);
@@ -142,13 +124,27 @@ export default function MonitorPage() {
     },
   });
 
-  const toggleKeywordMutation = useMutation({
+  const deleteAccountMutation = useMutation({
     mutationFn: async (id: string) => {
-      await new Promise((r) => setTimeout(r, 200));
-      return id;
+      const { apiClient } = await import("@/lib/api");
+      await apiClient.delete(`/api/monitor/accounts/${id}`);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["monitor-keywords"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["monitor-accounts"] });
+    },
   });
+
+  const toggleAccountMutation = useMutation({
+    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
+      const { apiClient } = await import("@/lib/api");
+      await apiClient.put(`/api/monitor/accounts/${id}`, { is_active });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["monitor-accounts"] });
+    },
+  });
+
+  const isLoading = keywordsLoading || accountsLoading;
 
   return (
     <div className="flex flex-col h-full">
@@ -185,12 +181,6 @@ export default function MonitorPage() {
                   )}
                 </Label>
               </div>
-              <div className="flex items-center gap-2">
-                <Badge variant={sseConnected ? "default" : "secondary"} className={sseConnected ? "bg-green-500" : ""}>
-                  <span className={`h-2 w-2 rounded-full mr-1 ${sseConnected ? "bg-white animate-pulse" : "bg-gray-400"}`} />
-                  {sseConnected ? "实时连接" : "连接中..."}
-                </Badge>
-              </div>
             </div>
           </div>
         </div>
@@ -204,7 +194,7 @@ export default function MonitorPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-base flex items-center gap-2">
-                    <Search className="h-4 w-4" />
+                    <Radio className="h-4 w-4" />
                     关键词监控
                   </CardTitle>
                   <CardDescription>包含以下关键词的推文</CardDescription>
@@ -227,14 +217,22 @@ export default function MonitorPage() {
                         placeholder="例如：GPT-5, Claude..."
                         value={newKeyword}
                         onChange={(e) => setNewKeyword(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && newKeyword.trim()) {
+                            addKeywordMutation.mutate(newKeyword.trim());
+                          }
+                        }}
                       />
                     </div>
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setIsAddKeywordDialogOpen(false)}>
                         取消
                       </Button>
-                      <Button onClick={() => addKeywordMutation.mutate(newKeyword)}>
-                        添加
+                      <Button
+                        onClick={() => addKeywordMutation.mutate(newKeyword.trim())}
+                        disabled={!newKeyword.trim() || addKeywordMutation.isPending}
+                      >
+                        {addKeywordMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "添加"}
                       </Button>
                     </DialogFooter>
                   </DialogContent>
@@ -244,21 +242,38 @@ export default function MonitorPage() {
             <CardContent>
               <ScrollArea className="h-[200px]">
                 <div className="space-y-2">
-                  {mockKeywords.map((kw) => (
-                    <div key={kw.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50">
-                      <span className={!kw.is_active ? "text-muted-foreground" : ""}>{kw.keyword}</span>
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={kw.is_active}
-                          onCheckedChange={() => toggleKeywordMutation.mutate(kw.id)}
-                          id={`kw-${kw.id}`}
-                        />
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500 hover:text-red-600">
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
+                  {isLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                     </div>
-                  ))}
+                  ) : keywords.length > 0 ? (
+                    keywords.map((kw) => (
+                      <div key={kw.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50">
+                        <span className={!kw.is_active ? "text-muted-foreground" : ""}>{kw.name}</span>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={kw.is_active}
+                            onCheckedChange={(checked) =>
+                              toggleKeywordMutation.mutate({ id: kw.id, is_active: checked })
+                            }
+                            id={`kw-${kw.id}`}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-red-500 hover:text-red-600"
+                            onClick={() => deleteKeywordMutation.mutate(kw.id)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center text-muted-foreground py-4">
+                      暂无监控关键词
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
             </CardContent>
@@ -290,17 +305,33 @@ export default function MonitorPage() {
                     </DialogHeader>
                     <div className="py-4">
                       <Input
-                        placeholder="例如：@karpathy"
+                        placeholder="例如：karpathy"
                         value={newAccount}
                         onChange={(e) => setNewAccount(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && newAccount.trim()) {
+                            addAccountMutation.mutate({
+                              name: newAccount.trim(),
+                              value: newAccount.trim(),
+                            });
+                          }
+                        }}
                       />
                     </div>
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setIsAddAccountDialogOpen(false)}>
                         取消
                       </Button>
-                      <Button onClick={() => addAccountMutation.mutate(newAccount)}>
-                        添加
+                      <Button
+                        onClick={() =>
+                          addAccountMutation.mutate({
+                            name: newAccount.trim(),
+                            value: newAccount.trim(),
+                          })
+                        }
+                        disabled={!newAccount.trim() || addAccountMutation.isPending}
+                      >
+                        {addAccountMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "添加"}
                       </Button>
                     </DialogFooter>
                   </DialogContent>
@@ -310,17 +341,47 @@ export default function MonitorPage() {
             <CardContent>
               <ScrollArea className="h-[200px]">
                 <div className="space-y-2">
-                  {mockAccounts.map((acc) => (
-                    <div key={acc.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50">
-                      <span className={!acc.is_active ? "text-muted-foreground" : ""}>{acc.account}</span>
-                      <div className="flex items-center gap-2">
-                        <Switch checked={acc.is_active} id={`acc-${acc.id}`} />
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500 hover:text-red-600">
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
+                  {isLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                     </div>
-                  ))}
+                  ) : accounts.length > 0 ? (
+                    accounts.map((acc) => (
+                      <div key={acc.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50">
+                        <div className="flex items-center gap-2">
+                          <span className={!acc.is_active ? "text-muted-foreground" : ""}>
+                            @{acc.config.username || acc.config.account || acc.name}
+                          </span>
+                          {acc.monitor_type === "nitter" && (
+                            <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-500/30">
+                              Nitter
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={acc.is_active}
+                            onCheckedChange={(checked) =>
+                              toggleAccountMutation.mutate({ id: acc.id, is_active: checked })
+                            }
+                            id={`acc-${acc.id}`}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-red-500 hover:text-red-600"
+                            onClick={() => deleteAccountMutation.mutate(acc.id)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center text-muted-foreground py-4">
+                      暂无监控账号
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
             </CardContent>
@@ -334,18 +395,20 @@ export default function MonitorPage() {
             <CardContent>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">今日抓取</span>
-                  <span className="font-semibold">156</span>
+                  <span className="text-sm text-muted-foreground">关键词数量</span>
+                  <span className="font-semibold">{keywords.length}</span>
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">触发通知</span>
-                  <span className="font-semibold text-green-600">12</span>
+                  <span className="text-sm text-muted-foreground">账号数量</span>
+                  <span className="font-semibold">{accounts.length}</span>
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">平均延迟</span>
-                  <span className="font-semibold">~2 分钟</span>
+                  <span className="text-sm text-muted-foreground">活跃监控</span>
+                  <span className="font-semibold text-green-600">
+                    {keywords.filter((k) => k.is_active).length + accounts.filter((a) => a.is_active).length}
+                  </span>
                 </div>
                 <Separator />
                 <Button variant="outline" className="w-full" size="sm">
@@ -357,61 +420,6 @@ export default function MonitorPage() {
           </Card>
         </div>
 
-        {/* Live Feed */}
-        <div className="mt-6">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Radio className="h-5 w-5 text-sky-500" />
-            实时推送
-            <Badge variant="secondary" className="ml-2">{articles?.length || 0} 条</Badge>
-          </h2>
-
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {articles?.map((article) => (
-                <Card key={article.id} className="group hover:shadow-md transition-shadow">
-                  <CardContent className="pt-4">
-                    <div className="flex items-start gap-3">
-                      <div className="p-2 bg-sky-500/10 rounded-lg">
-                        <Radio className="h-4 w-4 text-sky-500" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-sm font-medium">{article.author}</span>
-                          {article.matched_keyword && (
-                            <Badge variant="default" className="text-xs bg-sky-500">
-                              #{article.matched_keyword}
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-sm line-clamp-2 mb-2">{article.title}</p>
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {new Date(article.published_at).toLocaleString("zh-CN")}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button variant="ghost" size="sm">
-                          收藏
-                        </Button>
-                        <Button variant="ghost" size="sm" asChild>
-                          <a href={article.url} target="_blank" rel="noopener noreferrer">
-                            查看原文
-                          </a>
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

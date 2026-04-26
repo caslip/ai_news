@@ -17,10 +17,12 @@ export const apiClient = axios.create({
 export interface Source {
   id: string;
   name: string;
-  type: "rss" | "twitter" | "github" | "netter";
+  type: "rss" | "twitter" | "github" | "nitter" | "keyword" | "account";
   config: Record<string, any>;
   is_active: boolean;
   last_fetched_at?: string;
+  user_id?: string;
+  monitor_type?: "keyword" | "account";
   created_by?: string;
   created_at: string;
   updated_at?: string;
@@ -33,15 +35,21 @@ export interface SourceListResponse {
   page_size: number;
 }
 
+// 注意：信源管理页面只允许创建 rss 和 github 类型
+// X 账号（nitter/twitter）和监控配置（keyword/account）通过 X 监控页面创建
 export interface SourceCreate {
   name: string;
-  type: "rss" | "twitter" | "github" | "netter";
+  type: "rss" | "github";
   config: Record<string, any>;
+  value?: string;
+  params?: Record<string, unknown>;
+  user_id?: string;
+  monitor_type?: string;
 }
 
 export interface SourceUpdate {
   name?: string;
-  type?: "rss" | "twitter" | "github" | "netter";
+  type?: "rss" | "github";
   config?: Record<string, any>;
   is_active?: boolean;
 }

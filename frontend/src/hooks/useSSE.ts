@@ -102,14 +102,14 @@ class SSEManager {
       : 'http://localhost:8000';
     const fullUrl = `${apiUrl}${url}`;
     
-    console.log('[SSE Manager] Connecting to:', fullUrl);
+    console.log('[SSE Manager] 正在连接:', fullUrl);
     
     this.eventSource = new EventSource(fullUrl);
     
     this.eventSource.onopen = () => {
       this.isConnected = true;
       this.reconnectAttempts = 0;
-      console.log('[SSE Manager] Connected');
+      console.debug('[SSE Manager] 已连接');
     };
     
     this.eventSource.onmessage = (e) => {
@@ -122,7 +122,7 @@ class SSEManager {
         };
         this.emit(event);
       } catch (err) {
-        console.error('[SSE Manager] Parse error:', err);
+        // 静默处理解析错误，不打印到控制台
       }
     };
     
@@ -146,13 +146,14 @@ class SSEManager {
           };
           this.emit(event);
         } catch (err) {
-          console.error(`[SSE Manager] Parse ${type} error:`, err);
-        }
+        // 静默处理事件解析错误
+      }
       });
     });
     
     this.eventSource.onerror = (error) => {
-      console.error('[SSE Manager] Error:', error);
+      // SSE 连接失败是正常现象（后端可能没启动），不要用 console.error
+      console.warn('[SSE Manager] 连接失败，将在后台重试');
       this.isConnected = false;
       
       this.eventSource?.close();
@@ -163,7 +164,7 @@ class SSEManager {
         const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
         this.reconnectAttempts++;
         
-        console.log(`[SSE Manager] Reconnecting in ${delay}ms... (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+        console.debug(`[SSE Manager] ${delay}ms 后重试... (第 ${this.reconnectAttempts} 次/${this.maxReconnectAttempts})`);
         
         this.reconnectTimeout = setTimeout(() => {
           this.connect(url);
@@ -186,7 +187,7 @@ class SSEManager {
     this.isConnected = false;
     this.url = '';
     this.reconnectAttempts = 0;
-    console.log('[SSE Manager] Disconnected');
+    console.debug('[SSE Manager] 已断开连接');
   }
   
   private emit(event: SSEEvent) {
@@ -194,7 +195,7 @@ class SSEManager {
       try {
         listener(event);
       } catch (err) {
-        console.error('[SSE Manager] Listener error:', err);
+        // 静默处理监听器错误
       }
     });
   }

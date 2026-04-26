@@ -21,7 +21,8 @@ router = APIRouter()
 
 @router.get("/", response_model=SourceListResponse)
 def list_sources(
-    type: Optional[str] = Query(None, description="信源类型过滤"),
+    type: Optional[str] = Query(None, description="信源类型过滤 (rss/twitter/github/nitter/keyword/account)"),
+    monitor_type: Optional[str] = Query(None, description="监控类型过滤 (keyword/account)"),
     is_active: Optional[bool] = Query(None, description="是否激活"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -32,6 +33,9 @@ def list_sources(
 
     if type:
         query = query.filter(Source.type == type)
+
+    if monitor_type:
+        query = query.filter(Source.monitor_type == monitor_type)
 
     if is_active is not None:
         query = query.filter(Source.is_active == is_active)
@@ -53,11 +57,20 @@ def create_source(
     db: Session = Depends(get_db),
     current_user: UserResponse = Depends(get_current_user),
 ):
+    # 信源管理页面只允许创建 rss 和 github 类型
+    # X 账号（nitter/twitter）和监控配置（keyword/account）通过 X 监控页面创建
+    if source_data.type not in ("rss", "github"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="不支持从此入口创建该类型信源，请使用 X 监控页面"
+        )
     source = Source(
         name=source_data.name,
         type=source_data.type,
         config=source_data.config,
-        created_by=current_user.id,  # 保持字符串格式
+        created_by=current_user.id,
+        user_id=source_data.user_id or current_user.id,
+        monitor_type=source_data.monitor_type,
     )
     db.add(source)
     db.commit()
@@ -87,6 +100,13 @@ def update_source(
     source = db.query(Source).filter(Source.id == source_id).first()
     if not source:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
+
+    # 信源管理页面只允许操作 rss 和 github 类型
+    if source_data.type is not None and source_data.type not in ("rss", "github"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="不支持从此入口修改该类型信源，请使用 X 监控页面"
+        )
 
     update_dict = source_data.model_dump(exclude_unset=True)
     for key, value in update_dict.items():

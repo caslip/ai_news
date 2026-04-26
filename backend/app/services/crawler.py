@@ -621,6 +621,7 @@ class NitterCrawler:
         self,
         username: str,
         max_results: int = 20,
+        source_type_override: str = None,
     ) -> list[ParsedArticle]:
         """
         通过 Nitter RSS 抓取用户推文
@@ -628,6 +629,7 @@ class NitterCrawler:
         Args:
             username: Twitter 用户名（不带 @）
             max_results: 最大数量（Nitter RSS 默认返回约 20 条）
+            source_type_override: 覆盖 source_type（如设为 "twitter" 而非默认的 "nitter"）
 
         Returns:
             list[ParsedArticle]: 解析后的推文列表
@@ -645,7 +647,7 @@ class NitterCrawler:
 
             for entry in feed.entries:
                 try:
-                    article = self._parse_entry(entry, username)
+                    article = self._parse_entry(entry, username, source_type_override)
                     if article:
                         articles.append(article)
                         if len(articles) >= max_results:
@@ -658,14 +660,26 @@ class NitterCrawler:
 
         return articles
 
-    def _parse_entry(self, entry, username: str) -> Optional[ParsedArticle]:
-        """解析单条 Nitter RSS 条目"""
+    def _parse_entry(self, entry, username: str, source_type_override: str = None) -> Optional[ParsedArticle]:
+        """解析单条 Nitter RSS 条目
+        
+        Args:
+            entry: RSS entry
+            username: Twitter username
+            source_type_override: Override the source_type (e.g., 'twitter' instead of 'nitter')
+        """
         import re
 
         # 标题/正文
         title = getattr(entry, "title", "") or ""
         description = getattr(entry, "description", "") or ""
         link = getattr(entry, "link", "") or ""
+        
+        # 移除 Nitter URL 后缀 "#m"，转换为真正的 Twitter URL
+        if link:
+            link = link.replace("#m", "")
+            # 替换 nitter.net 为 x.com
+            link = link.replace("nitter.net", "x.com")
 
         # Nitter 的 description 包含 HTML，需要解析
         # 格式: <p>推文内容</p><br><a href="...">❤️ 123</a> <a href="...">🔁 45</a> <a href="...">💬 6</a>
@@ -727,10 +741,24 @@ class NitterCrawler:
             "fan_count": fan_count,
         }
 
+        # 清理标题
+        # 如果 title 是链接格式（如 x.com/i/article/...），检查提取的内容是否有意义
+        is_url_title = "x.com" in title or "nitter.net" in title or title.startswith("http")
+        
+        # 检查 tweet_text 是否只是链接
+        is_url_text = tweet_text.startswith("x.com") or tweet_text.startswith("http") or "x.com/i/article" in tweet_text
+        
+        if is_url_title or is_url_text:
+            # title 或提取的文本都是链接，使用有意义的标题
+            title = "[图片/链接推文]"
+        
         # 如果没有从 description 提取到正文，用 title
-        if not tweet_text:
+        if not tweet_text or tweet_text.startswith("x.com") or "x.com/i/article" in tweet_text:
             tweet_text = title
 
+        # Use override source_type if provided, otherwise default to "nitter"
+        source_type = source_type_override if source_type_override else "nitter"
+        
         return ParsedArticle(
             title=title[:100] + ("..." if len(title) > 100 else ""),
             url=link,
@@ -739,7 +767,7 @@ class NitterCrawler:
             author=f"@{username}",
             published_at=published_at,
             source_name=f"@{username} (Nitter)",
-            source_type="netter",
+            source_type=source_type,
             raw_metadata=raw_metadata,
             content_hash=content_hash,
             fan_count=fan_count,
@@ -750,8 +778,15 @@ class NitterCrawler:
         self,
         username: str,
         max_results: int = 20,
+        source_type_override: str = None,
     ) -> list[ParsedArticle]:
-        """同步版本的 fetch_user_tweets"""
+        """同步版本的 fetch_user_tweets
+        
+        Args:
+            username: Twitter 用户名（不带 @）
+            max_results: 最大数量
+            source_type_override: 覆盖 source_type（如设为 "twitter" 而非默认的 "nitter"）
+        """
         import requests
 
         response = requests.get(
@@ -766,7 +801,7 @@ class NitterCrawler:
 
         for entry in feed.entries:
             try:
-                article = self._parse_entry(entry, username)
+                article = self._parse_entry(entry, username, source_type_override)
                 if article:
                     articles.append(article)
                     if len(articles) >= max_results:
@@ -788,32 +823,31 @@ def crawl_source(source_config: dict) -> list[dict]:
         list[dict]: 文章数据列表
     """
     articles = []
+    source_type = source_config.get("type", "")
 
-    if source_config["type"] == "rss":
+    if source_type == "rss":
         crawler = RSSCrawler()
         feed_url = source_config.get("feed_url")
         if feed_url:
             parsed = crawler.fetch_sync(feed_url)
             articles = [article_to_dict(a) for a in parsed]
 
-    elif source_config["type"] == "github":
+    elif source_type == "github":
         crawler = GitHubCrawler()
         language = source_config.get("language", "")
         since = source_config.get("since", "daily")
         parsed = crawler.fetch_trending_sync(language=language, since=since)
         articles = [article_to_dict(a) for a in parsed]
 
-    elif source_config["type"] == "twitter":
-        import os
-        bearer_token = os.environ.get("TWITTER_BEARER_TOKEN", "")
-        if bearer_token:
-            crawler = TwitterCrawler(bearer_token)
-            account = source_config.get("account", "").lstrip("@")
-            if account:
-                parsed = crawler.fetch_user_tweets_sync(account)
-                articles = [article_to_dict(a) for a in parsed]
+    elif source_type == "twitter":
+        # Twitter 类型使用 Nitter RSS 获取，但保留原始 source_type
+        crawler = NitterCrawler()
+        username = source_config.get("account", "").lstrip("@") or source_config.get("username", "")
+        if username:
+            parsed = crawler.fetch_user_tweets_sync(username, source_type_override="twitter")
+            articles = [article_to_dict(a) for a in parsed]
 
-    elif source_config["type"] == "netter":
+    elif source_type == "nitter":
         crawler = NitterCrawler()
         username = source_config.get("username", "")
         if username:

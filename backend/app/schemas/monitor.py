@@ -1,5 +1,8 @@
 """
 Monitor 配置 Schema
+[已废弃] 关键词和账号监控配置已迁移到 sources 表。
+请使用 app/schemas/source.py 中的 SourceCreate / SourceResponse 代替。
+此文件保留用于向后兼容，将在后续版本中删除。
 """
 
 from pydantic import BaseModel, Field

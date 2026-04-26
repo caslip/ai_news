@@ -1,14 +1,15 @@
 """
 X (Twitter) 监控服务 - 支持关键词和账号监控
+通过 Nitter RSS 获取推文数据，无需 API Key
 """
 
-import re
 import logging
-from typing import List, Dict, Any, Optional, Set
+from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from datetime import datetime
-import asyncio
-import httpx
+
+from celery import shared_task
+from app.services.crawler import NitterCrawler
 
 logger = logging.getLogger(__name__)
 
@@ -42,32 +43,16 @@ class MonitorAlert:
 
 
 class XMonitor:
-    """X (Twitter) 监控器"""
-    
+    """X (Twitter) 监控器 - 通过 Nitter RSS 获取数据"""
+
     def __init__(
         self,
         keywords: List[str],
         accounts: List[str],
-        bearer_token: Optional[str] = None
     ):
         self.keywords = [MonitoredKeyword(k) for k in keywords]
         self.accounts = [MonitoredAccount(a) for a in accounts]
-        self.bearer_token = bearer_token or ""
-        self.client: Optional[httpx.AsyncClient] = None
-    
-    async def __aenter__(self):
-        self.client = httpx.AsyncClient(
-            headers={
-                "Authorization": f"Bearer {self.bearer_token}",
-                "User-Agent": "AI-News-Monitor/1.0",
-            },
-            timeout=30.0
-        )
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.client:
-            await self.client.aclose()
+        self.nitter = NitterCrawler()
     
     def _match_keyword(self, text: str) -> Optional[str]:
         """检查文本是否匹配关键词"""
@@ -84,70 +69,34 @@ class XMonitor:
         return None
     
     async def fetch_user_tweets(self, username: str, max_results: int = 10) -> List[Dict[str, Any]]:
-        """获取用户推文"""
-        if not self.client or not self.bearer_token:
-            logger.warning("No bearer token provided for Twitter API")
-            return []
-        
+        """通过 Nitter RSS 获取用户推文"""
         try:
-            # 获取用户 ID
-            username_clean = username.lstrip("@")
-            user_response = await self.client.get(
-                f"https://api.twitter.com/2/users/by/username/{username_clean}"
-            )
-            
-            if user_response.status_code != 200:
-                logger.error(f"Failed to get user ID for {username}: {user_response.status_code}")
-                return []
-            
-            user_data = user_response.json()
-            user_id = user_data["data"]["id"]
-            
-            # 获取推文
-            tweets_response = await self.client.get(
-                f"https://api.twitter.com/2/users/{user_id}/tweets",
-                params={
-                    "max_results": min(max_results, 100),
-                    "tweet.fields": "created_at,public_metrics,author_id",
-                    "expansions": "author_id",
-                    "user.fields": "name,username,public_metrics",
+            # 使用同步方法在异步上下文中调用
+            tweets = self.nitter.fetch_user_tweets_sync(username, max_results=max_results)
+            return [
+                {
+                    "id": t.url.split("/")[-1] if t.url else "",
+                    "text": t.content or t.title,
+                    "author": f"@{username}",
+                    "author_name": "",
+                    "followers": 0,
+                    "created_at": t.published_at.isoformat() if t.published_at else "",
+                    "metrics": t.engagement or {},
+                    "url": t.url,
                 }
-            )
-            
-            if tweets_response.status_code != 200:
-                logger.error(f"Failed to get tweets: {tweets_response.status_code}")
-                return []
-            
-            data = tweets_response.json()
-            users = {u["id"]: u for u in data.get("includes", {}).get("users", [])}
-            
-            tweets = []
-            for tweet in data.get("data", []):
-                author = users.get(tweet["author_id"], {})
-                tweets.append({
-                    "id": tweet["id"],
-                    "text": tweet["text"],
-                    "author": f"@{author.get('username', username_clean)}",
-                    "author_name": author.get("name", ""),
-                    "followers": author.get("public_metrics", {}).get("followers_count", 0),
-                    "created_at": tweet.get("created_at"),
-                    "metrics": tweet.get("public_metrics", {}),
-                    "url": f"https://twitter.com/{username_clean}/status/{tweet['id']}",
-                })
-            
-            return tweets
-        
+                for t in tweets
+            ]
         except Exception as e:
-            logger.error(f"Error fetching tweets: {e}")
+            logger.error(f"Error fetching tweets from Nitter for @{username}: {e}")
             return []
     
     async def check_tweets(self, tweets: List[Dict[str, Any]]) -> List[MonitorAlert]:
         """检查推文并生成告警"""
         alerts = []
-        
+
         for tweet in tweets:
             text = tweet.get("text", "")
-            
+
             # 检查关键词匹配
             matched_keyword = self._match_keyword(text)
             if matched_keyword:
@@ -158,11 +107,11 @@ class XMonitor:
                     author=tweet.get("author", ""),
                     url=tweet.get("url", ""),
                     engagement=tweet.get("metrics", {}),
-                    timestamp=datetime.fromisoformat(tweet.get("created_at", datetime.utcnow().isoformat())),
+                    timestamp=self._parse_timestamp(tweet.get("created_at")),
                     alert_type="keyword"
                 ))
                 continue
-            
+
             # 检查账号匹配
             for acc in self.accounts:
                 if not acc.is_active:
@@ -175,12 +124,21 @@ class XMonitor:
                         author=tweet.get("author", ""),
                         url=tweet.get("url", ""),
                         engagement=tweet.get("metrics", {}),
-                        timestamp=datetime.fromisoformat(tweet.get("created_at", datetime.utcnow().isoformat())),
+                        timestamp=self._parse_timestamp(tweet.get("created_at")),
                         alert_type="account"
                     ))
                     break
-        
+
         return alerts
+
+    def _parse_timestamp(self, ts: str) -> datetime:
+        """安全解析时间戳"""
+        if not ts:
+            return datetime.utcnow()
+        try:
+            return datetime.fromisoformat(ts)
+        except (ValueError, TypeError):
+            return datetime.utcnow()
     
     async def monitor_cycle(self) -> List[MonitorAlert]:
         """执行一次监控循环"""
@@ -204,18 +162,16 @@ class XMonitor:
 @shared_task
 async def run_monitor_cycle(keywords: List[str], accounts: List[str]) -> Dict[str, Any]:
     """
-    Celery 任务：运行监控循环
-    
+    Celery 任务：运行监控循环（通过 Nitter RSS）
+
     被定时调用检查新的匹配推文
     """
     alerts = []
-    
+
     try:
-        bearer_token = os.environ.get("TWITTER_BEARER_TOKEN", "")
-        
-        async with XMonitor(keywords, accounts, bearer_token) as monitor:
-            alerts = await monitor.monitor_cycle()
-        
+        monitor = XMonitor(keywords, accounts)
+        alerts = await monitor.monitor_cycle()
+
         # 发送告警
         for alert in alerts:
             from app.services.sse_tasks import push_monitor_alert
@@ -230,14 +186,14 @@ async def run_monitor_cycle(keywords: List[str], accounts: List[str]) -> Dict[st
                 },
                 matched_type=alert.alert_type
             )
-        
+
         return {
             "status": "success",
             "alerts_count": len(alerts),
             "keywords_count": len(keywords),
             "accounts_count": len(accounts),
         }
-    
+
     except Exception as e:
         logger.error(f"Monitor cycle failed: {e}")
         return {

@@ -11,7 +11,7 @@ services:
       dockerfile: Dockerfile
     container_name: ai-news-frontend
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "${FRONTEND_PORT:-3001}:3000"
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - NEXT_PUBLIC_API_URL=${API_URL:-http://backend:8000}
@@ -42,8 +42,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-strong-random-key}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000,http://frontend:3000}
-      - TWITTER_BEARER_TOKEN=${TWITTER_BEARER_TOKEN}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3001,http://frontend:3001}
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
       - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
@@ -79,7 +78,6 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-strong-random-key}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - TWITTER_BEARER_TOKEN=${TWITTER_BEARER_TOKEN}
     volumes:
       - ./logs:/app/logs
     depends_on:

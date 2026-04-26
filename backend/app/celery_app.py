@@ -31,25 +31,25 @@ celery_app.conf.update(
 )
 
 celery_app.conf.beat_schedule = {
-    # Nitter 抓取 - 每 5 分钟（无需 API Key）
-    "crawl-netter-sources": {
-        "task": "app.services.celery_tasks.crawl_netter_sources",
-        "schedule": crontab(minute="*/5"),
-    },
     # RSS 抓取 - 每 15 分钟
     "crawl-rss-sources": {
         "task": "app.services.celery_tasks.crawl_rss_sources",
         "schedule": crontab(minute="*/15"),
     },
-    # Twitter 抓取 - 每 5 分钟
-    "crawl-twitter-sources": {
-        "task": "app.services.celery_tasks.crawl_twitter_sources",
-        "schedule": crontab(minute="*/5"),
-    },
     # GitHub 抓取 - 每 30 分钟
     "crawl-github-sources": {
         "task": "app.services.celery_tasks.crawl_github_sources",
         "schedule": crontab(minute="*/30"),
+    },
+    # Nitter 抓取 - 每 5 分钟
+    "crawl-nitter-sources": {
+        "task": "app.services.celery_tasks.crawl_nitter_sources",
+        "schedule": crontab(minute="*/5"),
+    },
+    # Twitter 抓取 - 每 5 分钟（通过 Nitter RSS，无需 API Key）
+    "crawl-twitter-sources": {
+        "task": "app.services.celery_tasks.crawl_twitter_sources",
+        "schedule": crontab(minute="*/5"),
     },
     # 热榜缓存刷新 - 每 5 分钟
     "refresh-hot-articles-cache": {

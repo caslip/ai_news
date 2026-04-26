@@ -46,9 +46,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Rss,
-  Radio,
-  Plus,
   RefreshCw,
+  Plus,
   Trash2,
   Power,
   PowerOff,
@@ -61,16 +60,12 @@ import {
 
 const sourceTypeIcons: Record<string, any> = {
   rss: Rss,
-  twitter: Radio,
   github: RefreshCw,
-  netter: Radio,
 };
 
 const sourceTypeColors: Record<string, string> = {
   rss: "text-orange-500 bg-orange-500/10",
-  twitter: "text-sky-500 bg-sky-500/10",
   github: "text-purple-500 bg-purple-500/10",
-  netter: "text-blue-400 bg-blue-400/10",
 };
 
 export default function SourcesPage() {
@@ -78,9 +73,9 @@ export default function SourcesPage() {
   const [selectedSourceIds, setSelectedSourceIds] = useState<Set<string>>(new Set());
   const [newSource, setNewSource] = useState({
     name: "",
-    type: "rss" as "rss" | "twitter" | "github" | "netter",
+    type: "rss" as "rss" | "github",
     config: "",
-    username: "",
+    language: "",
   });
 
   const queryClient = useQueryClient();
@@ -125,22 +120,18 @@ export default function SourcesPage() {
         name: "",
         type: "rss",
         config: "",
-        username: "",
+        language: "",
       });
     },
   });
 
   const handleAddSource = () => {
     let finalConfig: Record<string, any> = {};
-    if (newSource.type === "netter") {
-      finalConfig = { username: newSource.username };
-    } else {
-      try {
-        finalConfig = JSON.parse(newSource.config);
-      } catch (e) {
-        console.error("Invalid config JSON:", e);
-        return;
-      }
+    try {
+      finalConfig = JSON.parse(newSource.config);
+    } catch (e) {
+      console.error("Invalid config JSON:", e);
+      return;
     }
 
     createMutation.mutate({
@@ -152,13 +143,11 @@ export default function SourcesPage() {
 
   const getConfigDisplay = (type: string, config: Record<string, any>) => {
     if (type === "rss") return config.feed_url;
-    if (type === "twitter") return config.account;
     if (type === "github") {
       const lang = config.language || "all";
       const since = config.since || "daily";
       return `Language: ${lang} | Since: ${since}`;
     }
-    if (type === "netter") return `@${config.username}`;
     return "";
   };
 
@@ -278,22 +267,10 @@ export default function SourcesPage() {
                               RSS 订阅
                             </div>
                           </SelectItem>
-                          <SelectItem value="twitter">
-                            <div className="flex items-center gap-2">
-                              <Radio className="h-4 w-4 text-sky-500" />
-                              Twitter / X
-                            </div>
-                          </SelectItem>
                           <SelectItem value="github">
                             <div className="flex items-center gap-2">
                               <RefreshCw className="h-4 w-4 text-purple-500" />
                               GitHub Trending
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="netter">
-                            <div className="flex items-center gap-2">
-                              <Radio className="h-4 w-4 text-blue-400" />
-                              Nitter (无需 API Key)
                             </div>
                           </SelectItem>
                         </SelectContent>
@@ -302,7 +279,7 @@ export default function SourcesPage() {
 
                     <div className="space-y-2">
                       <Label htmlFor="config">配置</Label>
-                      {newSource.type === "netter" ? (
+                      {newSource.type === "nitter" ? (
                         <Input
                           id="config"
                           placeholder="输入 Twitter 用户名，如 Khazix0918"
@@ -315,8 +292,6 @@ export default function SourcesPage() {
                           placeholder={
                             newSource.type === "rss"
                               ? '{"feed_url": "https://example.com/feed.xml"}'
-                              : newSource.type === "twitter"
-                              ? '{"account": "@username"}'
                               : '{"language": "python", "since": "daily"}'
                           }
                           value={newSource.config}

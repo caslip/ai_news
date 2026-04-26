@@ -60,6 +60,9 @@ const mockTags: Tag[] = [
   { id: "5", name: "工具", color: "#ec4899" },
 ];
 
+// 使用固定日期避免 hydration mismatch
+const FIXED_NOW = "2026-04-25T10:00:00.000Z";
+
 const mockBookmarks: Bookmark[] = [
   {
     id: "1",
@@ -72,10 +75,10 @@ const mockBookmarks: Bookmark[] = [
       author: "@sama",
       hot_score: 98.5,
       tags: ["LLM", "OpenAI"],
-      fetched_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+      fetched_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 60 * 2).toISOString(),
     },
     tags: [mockTags[0]],
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
+    created_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 60 * 3).toISOString(),
   },
   {
     id: "2",
@@ -88,10 +91,10 @@ const mockBookmarks: Bookmark[] = [
       author: "zuck",
       hot_score: 96.8,
       tags: ["LLM", "开源"],
-      fetched_at: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
+      fetched_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 60 * 5).toISOString(),
     },
     tags: [mockTags[0], mockTags[1]],
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(),
+    created_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 60 * 6).toISOString(),
   },
   {
     id: "3",
@@ -104,10 +107,10 @@ const mockBookmarks: Bookmark[] = [
       author: "@startupfounder",
       hot_score: 92.3,
       tags: ["创业"],
-      fetched_at: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(),
+      fetched_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 60 * 8).toISOString(),
     },
     tags: [mockTags[2]],
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 10).toISOString(),
+    created_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 60 * 10).toISOString(),
   },
 ];
 

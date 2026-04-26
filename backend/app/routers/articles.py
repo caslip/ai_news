@@ -49,7 +49,7 @@ def list_articles(
     db: Session = Depends(get_db),
     current_user: Optional[UserResponse] = Depends(get_current_user_optional),
 ):
-    query = db.query(Article)
+    query = db.query(Article).join(Source).filter(Source.is_active == True)
 
     # 时间过滤
     start_time = get_time_filter(time_range)
@@ -60,7 +60,13 @@ def list_articles(
         query = query.filter(Article.source_id == UUID(source))
 
     if source_type:
-        query = query.join(Source).filter(Source.type == source_type)
+        # 支持逗号分隔的多个类型，如 "twitter,nitter"
+        types = [t.strip() for t in source_type.split(",")]
+        subquery = db.query(Source.id).filter(
+            Source.type.in_(types),
+            Source.is_active == True
+        ).subquery()
+        query = query.filter(Article.source_id.in_(subquery))
 
     # 低粉爆文过滤
     if is_low_fan_viral is not None:
@@ -150,6 +156,7 @@ def list_trending_articles(
 ):
     """获取低粉爆文列表"""
     query = db.query(Article).filter(Article.is_low_fan_viral == True)
+    query = query.join(Source).filter(Source.is_active == True)
 
     total = query.count()
     articles = query.order_by(Article.hot_score.desc()).offset((page - 1) * page_size).limit(page_size).all()
@@ -209,10 +216,38 @@ def get_article_stats(
     week_start = now - timedelta(days=7)
     month_start = now - timedelta(days=30)
 
-    today_count = db.query(func.count(Article.id)).filter(Article.fetched_at >= today_start).scalar()
-    week_count = db.query(func.count(Article.id)).filter(Article.fetched_at >= week_start).scalar()
-    month_count = db.query(func.count(Article.id)).filter(Article.fetched_at >= month_start).scalar()
-    total_count = db.query(func.count(Article.id)).scalar()
+    # 只统计来自活跃信源的文章
+    base_filter = Article.fetched_at >= today_start
+    base_filter = base_filter & (
+        db.query(Source.id).filter(
+            Source.id == Article.source_id,
+            Source.is_active == True
+        ).exists()
+    )
+
+    today_count = db.query(func.count(Article.id)).filter(
+        Article.fetched_at >= today_start,
+        Article.source_id.in_(
+            db.query(Source.id).filter(Source.is_active == True)
+        )
+    ).scalar()
+    week_count = db.query(func.count(Article.id)).filter(
+        Article.fetched_at >= week_start,
+        Article.source_id.in_(
+            db.query(Source.id).filter(Source.is_active == True)
+        )
+    ).scalar()
+    month_count = db.query(func.count(Article.id)).filter(
+        Article.fetched_at >= month_start,
+        Article.source_id.in_(
+            db.query(Source.id).filter(Source.is_active == True)
+        )
+    ).scalar()
+    total_count = db.query(func.count(Article.id)).filter(
+        Article.source_id.in_(
+            db.query(Source.id).filter(Source.is_active == True)
+        )
+    ).scalar()
 
     return ArticleStatsResponse(
         today_count=today_count or 0,

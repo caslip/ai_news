@@ -1,0 +1,326 @@
+{
+	"info": {
+		"_postman_id": "ai-news-api-test",
+		"name": "AI News API 测试",
+		"description": "AI News 项目的 API 测试集合，包含登录认证和 Twitter 信源爬取测试",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. 认证",
+			"item": [
+				{
+					"name": "登录",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"pm.collectionVariables.set('access_token', jsonData.access_token);",
+									"",
+									"pm.test('登录成功', function() {",
+									"    pm.response.to.have.status(200);",
+									"    pm.expect(jsonData).to.have.property('access_token');",
+									"    pm.expect(jsonData).to.have.property('user');",
+									"});",
+									"",
+									"console.log('Token 已保存:', jsonData.access_token);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"test@example.com\",\n    \"password\": \"Test123456\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:8000/api/auth/login",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["api", "auth", "login"]
+						},
+						"description": "登录获取 Access Token"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. 信源管理",
+			"item": [
+				{
+					"name": "获取 Twitter 信源列表",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"pm.test('获取成功', function() {",
+									"    pm.response.to.have.status(200);",
+									"    pm.expect(jsonData).to.have.property('items');",
+									"});",
+									"",
+									"// 打印所有 Twitter 信源",
+									"console.log('Twitter 信源列表:');",
+									"if (jsonData.items) {",
+									"    jsonData.items.forEach(function(source) {",
+									"        console.log('  - ' + source.name + ' (ID: ' + source.id + ')');",
+									"    });",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/api/sources?type=twitter",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["api", "sources"],
+							"query": [
+								{
+									"key": "type",
+									"value": "twitter"
+								}
+							]
+						},
+						"description": "获取所有 Twitter 类型信源"
+					},
+					"response": []
+				},
+				{
+					"name": "测试信源爬取",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"pm.test('爬取成功', function() {",
+									"    pm.response.to.have.status(200);",
+									"    pm.expect(jsonData).to.have.property('success');",
+									"    pm.expect(jsonData).to.have.property('message');",
+									"});",
+									"",
+									"console.log('爬取结果:', jsonData.message);",
+									"console.log('文章数量:', jsonData.article_count);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/api/sources/{source_id}/test",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["api", "sources", "{source_id}", "test"]
+						},
+						"description": "测试指定信源的爬取功能\n\n**注意**: 请先获取信源 ID，然后替换 URL 中的 {source_id}"
+					},
+					"response": []
+				},
+				{
+					"name": "创建 Twitter 信源",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"pm.test('创建成功', function() {",
+									"    pm.response.to.have.status(201);",
+									"    pm.expect(jsonData).to.have.property('id');",
+									"    pm.expect(jsonData.name).to.include('Karpathy');",
+									"});",
+									"",
+									"console.log('新信源 ID:', jsonData.id);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Andrej Karpathy (Twitter)\",\n    \"type\": \"twitter\",\n    \"config\": {\n        \"account\": \"karpathy\"\n    },\n    \"is_active\": true\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8000/api/sources",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["api", "sources"]
+						},
+						"description": "创建新的 Twitter 信源（用于监控 Karpathy）"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "3. 文章查询",
+			"item": [
+				{
+					"name": "获取 Twitter 推文列表",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"pm.test('查询成功', function() {",
+									"    pm.response.to.have.status(200);",
+									"    pm.expect(jsonData).to.have.property('items');",
+									"});",
+									"",
+									"console.log('推文总数:', jsonData.total);",
+									"console.log('当前页推文数:', jsonData.items ? jsonData.items.length : 0);",
+									"",
+									"// 打印前 3 条推文",
+									"if (jsonData.items && jsonData.items.length > 0) {",
+									"    console.log('\\n最新推文预览:');",
+									"    jsonData.items.slice(0, 3).forEach(function(article, i) {",
+									"        console.log((i+1) + '. ' + article.title.substring(0, 50) + '...');",
+									"        console.log('   来源: ' + article.source_type);",
+									"    });",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:8000/api/articles?source_type=twitter,nitter&sort=hot&page_size=10",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8000",
+							"path": ["api", "articles"],
+							"query": [
+								{
+									"key": "source_type",
+									"value": "twitter,nitter"
+								},
+								{
+									"key": "sort",
+									"value": "hot"
+								},
+								{
+									"key": "page_size",
+									"value": "10"
+								},
+								{
+									"key": "time_range",
+									"value": "week"
+								}
+							]
+						},
+						"description": "获取热门 Twitter/Nitter 推文"
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string",
+			"description": "登录后获取的 Access Token"
+		},
+		{
+			"key": "source_id",
+			"value": "",
+			"type": "string",
+			"description": "信源 ID（测试爬取时使用）"
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{access_token}}",
+				"type": "string"
+			}
+		]
+	}
+}

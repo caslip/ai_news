@@ -108,7 +108,8 @@ export function NotificationToastContainer({
     const newNotification = createNotificationFromEvent(lastEvent);
     if (newNotification) {
       setNotifications(prev => {
-        const updated = [newNotification, ...prev].slice(0, 20);
+        // 使用随机 ID 避免 hydration mismatch
+        const updated = [{ ...newNotification, id: `${newNotification.id}-${Math.random().toString(36).slice(2, 8)}` }, ...prev].slice(0, 20);
         return updated;
       });
       setUnreadCount(prev => prev + 1);
@@ -121,7 +122,7 @@ export function NotificationToastContainer({
     switch (event.type) {
       case 'new_article':
         return {
-          id: `article-${Date.now()}`,
+          id: `article-${Math.random().toString(36).slice(2, 9)}`,
           type: 'new_article',
           title: '新文章',
           message: event.data.article?.title || '发现新文章',
@@ -132,7 +133,7 @@ export function NotificationToastContainer({
 
       case 'trending_update':
         return {
-          id: `trending-${Date.now()}`,
+          id: `trending-${Math.random().toString(36).slice(2, 9)}`,
           type: 'trending',
           title: '爆文更新',
           message: `发现 ${event.data.articles?.length || 0} 篇新的低粉爆文`,
@@ -142,7 +143,7 @@ export function NotificationToastContainer({
 
       case 'monitor_alert':
         return {
-          id: `monitor-${Date.now()}`,
+          id: `monitor-${Math.random().toString(36).slice(2, 9)}`,
           type: 'monitor',
           title: '监控告警',
           message: event.data.tweet?.content?.slice(0, 100) || '收到监控告警',
@@ -153,7 +154,7 @@ export function NotificationToastContainer({
 
       case 'system_notification':
         return {
-          id: `system-${Date.now()}`,
+          id: `system-${Math.random().toString(36).slice(2, 9)}`,
           type: event.data.level === 'error' ? 'error' : 'system',
           title: '系统通知',
           message: event.data.message || '系统消息',

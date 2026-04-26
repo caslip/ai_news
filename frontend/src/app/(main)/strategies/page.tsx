@@ -56,6 +56,9 @@ interface Strategy {
   created_at: string;
 }
 
+// 使用固定日期避免 hydration mismatch
+const FIXED_NOW = "2026-04-25T10:00:00.000Z";
+
 const mockStrategies: Strategy[] = [
   {
     id: "1",
@@ -71,7 +74,7 @@ const mockStrategies: Strategy[] = [
       exclude_keywords: ["广告", "推广"],
     },
     is_active: true,
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+    created_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 60 * 24).toISOString(),
   },
   {
     id: "2",
@@ -87,7 +90,7 @@ const mockStrategies: Strategy[] = [
       exclude_keywords: ["广告", "推广", "抽奖"],
     },
     is_active: false,
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
+    created_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 60 * 48).toISOString(),
   },
 ];
 

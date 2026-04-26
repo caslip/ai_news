@@ -30,6 +30,41 @@ app.include_router(admin.router, prefix="/api", tags=["后台管理"])
 app.include_router(github.router, prefix="/api/github", tags=["GitHub Trending"])
 
 
+@app.on_event("startup")
+async def startup_event():
+    """应用启动时一次性爬取所有信源（静默失败，不阻塞启动）"""
+    import logging
+    import threading
+
+    logger = logging.getLogger(__name__)
+    logger.info("Application starting, triggering initial crawl tasks...")
+
+    def submit_crawl_tasks():
+        """在新线程中提交爬取任务，不阻塞主线程"""
+        import time
+        time.sleep(1)  # 等待应用完全启动
+        tasks = [
+            ("crawl_rss_sources", "app.services.celery_tasks.crawl_rss_sources"),
+            ("crawl_nitter_sources", "app.services.celery_tasks.crawl_nitter_sources"),
+            ("crawl_twitter_sources", "app.services.celery_tasks.crawl_twitter_sources"),
+            ("crawl_github_sources", "app.services.celery_tasks.crawl_github_sources"),
+        ]
+        for name, path in tasks:
+            try:
+                import importlib
+                module_path, func_name = path.rsplit(".", 1)
+                mod = importlib.import_module(module_path)
+                func = getattr(mod, func_name)
+                func.delay()
+                logger.info(f"Submitted {name} successfully")
+            except Exception as e:
+                logger.warning(f"Failed to submit {name} (Redis may be unavailable): {e}")
+
+    thread = threading.Thread(target=submit_crawl_tasks, daemon=True)
+    thread.start()
+    logger.info("Crawl tasks thread started")
+
+
 @app.get("/api/health")
 def health_check():
     return {"status": "healthy", "version": "1.0.0"}

@@ -48,6 +48,9 @@ interface ArticleListResponse {
   total_pages: number;
 }
 
+// 使用固定日期避免 hydration mismatch
+const FIXED_NOW = "2026-04-25T10:00:00.000Z";
+
 const mockTrendingArticles: Article[] = [
   {
     id: "1",
@@ -59,8 +62,8 @@ const mockTrendingArticles: Article[] = [
     hot_score: 92.3,
     fan_count: 1250,
     engagement: { likes: 890, retweets: 320, comments: 156 },
-    published_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-    fetched_at: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+    published_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 60 * 2).toISOString(),
+    fetched_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 45).toISOString(),
   },
   {
     id: "2",
@@ -72,8 +75,8 @@ const mockTrendingArticles: Article[] = [
     hot_score: 78.4,
     fan_count: 3200,
     engagement: { likes: 456, retweets: 123, comments: 89 },
-    published_at: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(),
-    fetched_at: new Date(Date.now() - 1000 * 60 * 20).toISOString(),
+    published_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 60 * 8).toISOString(),
+    fetched_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 20).toISOString(),
   },
   {
     id: "3",
@@ -85,8 +88,8 @@ const mockTrendingArticles: Article[] = [
     hot_score: 88.7,
     fan_count: 850,
     engagement: { likes: 1200, retweets: 450, comments: 280 },
-    published_at: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
-    fetched_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+    published_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 60 * 12).toISOString(),
+    fetched_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 30).toISOString(),
   },
   {
     id: "4",
@@ -98,8 +101,8 @@ const mockTrendingArticles: Article[] = [
     hot_score: 85.2,
     fan_count: 0,
     engagement: { likes: 320, retweets: 89, comments: 45 },
-    published_at: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-    fetched_at: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
+    published_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 60 * 5).toISOString(),
+    fetched_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 10).toISOString(),
   },
 ];
 

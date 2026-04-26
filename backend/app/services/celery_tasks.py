@@ -15,11 +15,19 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models.source import Source, SourceType
 from app.models.article import Article
-from app.services.crawler import RSSCrawler, GitHubCrawler, TwitterCrawler, NitterCrawler
+from app.services.crawler import RSSCrawler, GitHubCrawler, NitterCrawler
 
 logger = logging.getLogger(__name__)
 
-redis_client = redis.from_url(settings.redis_url, decode_responses=True)
+_redis_client = None
+
+
+def _get_redis_client():
+    """Lazy Redis client - only connects when actually used"""
+    global _redis_client
+    if _redis_client is None:
+        _redis_client = redis.from_url(settings.redis_url, decode_responses=True)
+    return _redis_client
 
 
 def get_db():
@@ -92,14 +100,9 @@ def crawl_rss_sources(self):
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def crawl_twitter_sources(self):
-    """抓取所有 Twitter 监控账号"""
-    import os
+    """抓取所有 Twitter 信源（通过 Nitter RSS，无需 API Key）"""
     db = get_db()
     try:
-        bearer_token = os.environ.get("TWITTER_BEARER_TOKEN")
-        if not bearer_token:
-            return {"task": "crawl_twitter_sources", "status": "skipped", "reason": "No Twitter token"}
-
         sources = db.query(Source).filter(
             Source.is_active == True,
             Source.type == SourceType.TWITTER
@@ -112,8 +115,9 @@ def crawl_twitter_sources(self):
                 if not account:
                     continue
 
-                crawler = TwitterCrawler(bearer_token)
-                tweets = crawler.fetch_user_tweets_sync(account, max_results=10)
+                # 使用 NitterCrawler 获取推文，保留原始 source_type
+                crawler = NitterCrawler()
+                tweets = crawler.fetch_user_tweets_sync(account, max_results=20, source_type_override="twitter")
 
                 saved_count = 0
                 for article_data in tweets:
@@ -153,18 +157,21 @@ def crawl_twitter_sources(self):
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def crawl_netter_sources(self):
-    """抓取所有 Nitter 信源（无需 API Key）"""
+def crawl_nitter_sources(self):
+    """抓取所有 Nitter 信源（无需 API Key）- 仅限 X 监控页面创建的信源）"""
     db = get_db()
     try:
+        # 只爬取 monitor_type='nitter' 的信源（通过 X 监控页面创建）
+        # 也兼容旧的 type='nitter', monitor_type=null 的信源（向后兼容）
         sources = db.query(Source).filter(
             Source.is_active == True,
-            Source.type == SourceType.NETTER
+            Source.type == SourceType.NETTER,
+            Source.monitor_type.in_(["nitter", None])
         ).all()
 
         if not sources:
             logger.info("No active Nitter sources found")
-            return {"task": "crawl_netter_sources", "status": "skipped", "reason": "No active Nitter sources"}
+            return {"task": "crawl_nitter_sources", "status": "skipped", "reason": "No active Nitter sources"}
 
         results = []
         for source in sources:
@@ -206,14 +213,14 @@ def crawl_netter_sources(self):
                 })
 
         return {
-            "task": "crawl_netter_sources",
+            "task": "crawl_nitter_sources",
             "timestamp": datetime.utcnow().isoformat(),
             "sources_count": len(sources),
             "results": results,
         }
 
     except Exception as e:
-        logger.error(f"crawl_netter_sources failed: {e}")
+        logger.error(f"crawl_nitter_sources failed: {e}")
         raise self.retry(exc=e)
     finally:
         db.close()
@@ -299,7 +306,7 @@ def refresh_hot_articles_cache():
             for a in hot_articles
         ]
 
-        redis_client.setex(cache_key, cache_ttl, json.dumps(articles_data))
+        _get_redis_client().setex(cache_key, cache_ttl, json.dumps(articles_data))
 
         return {
             "task": "refresh_hot_articles_cache",
@@ -333,7 +340,7 @@ def health_check():
         db.close()
 
     try:
-        redis_client.ping()
+        _get_redis_client().ping()
         checks["redis"] = "ok"
     except Exception as e:
         checks["redis"] = f"error: {str(e)}"
@@ -365,6 +372,15 @@ def crawl_single_source(source_id: str):
 
             crawler = NitterCrawler()
             articles = crawler.fetch_user_tweets_sync(username, max_results=20)
+
+        elif source.type == SourceType.TWITTER:
+            # Twitter 类型使用 Nitter RSS 获取，但保留原始 source_type
+            account = source.config.get("account", "").lstrip("@")
+            if not account:
+                return {"status": "error", "message": "No account configured for Twitter source"}
+
+            crawler = NitterCrawler()
+            articles = crawler.fetch_user_tweets_sync(account, max_results=20, source_type_override="twitter")
 
         elif source.type == SourceType.GITHUB:
             language = source.config.get("language", "")
