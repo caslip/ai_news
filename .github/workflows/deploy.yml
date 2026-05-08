@@ -18,7 +18,8 @@ jobs:
           key: ${{ secrets.SERVER_SSH_SECRET }}
           script: |
             cd ~/ai_news
-            source venv/bin/activate
             git pull origin main
+            source .venv/bin/activate
             cd backend
-            uvicorn app.main:app --host 0.0.0.0 --port 8000
+            pkill -f "uvicorn app.main:app" || true
+            nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > uvicorn.log 2>&1 &
