@@ -18,7 +18,7 @@ jobs:
           key: ${{ secrets.SERVER_SSH_SECRET }}
           script: |
             cd ~/ai_news
+            source venv/bin/activate
             git pull origin main
             cd backend
-            source venv/bin/activate
             uvicorn app.main:app --host 0.0.0.0 --port 8000
