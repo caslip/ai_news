@@ -13,6 +13,7 @@ from app.schemas.source import (
     SourceTestResponse,
     SourceBatchDeleteRequest,
 )
+from app.services.scheduler import crawl_single_source_sync
 from app.schemas.user import UserResponse
 from app.routers.auth import get_current_user
 
@@ -57,9 +58,9 @@ def create_source(
     db: Session = Depends(get_db),
     current_user: UserResponse = Depends(get_current_user),
 ):
-    # 信源管理页面只允许创建 rss 和 github 类型
+    # 信源管理页面只允许创建 rss、github、arxiv、hf_paper 类型
     # X 账号（nitter/twitter）和监控配置（keyword/account）通过 X 监控页面创建
-    if source_data.type not in ("rss", "github"):
+    if source_data.type not in ("rss", "github", "arxiv", "hf_paper"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="不支持从此入口创建该类型信源，请使用 X 监控页面"
@@ -75,6 +76,10 @@ def create_source(
     db.add(source)
     db.commit()
     db.refresh(source)
+
+    # 创建新信源后立即爬取一次
+    crawl_single_source_sync(str(source.id), source.type)
+
     return SourceResponse.model_validate(source)
 
 
@@ -101,8 +106,8 @@ def update_source(
     if not source:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
 
-    # 信源管理页面只允许操作 rss 和 github 类型
-    if source_data.type is not None and source_data.type not in ("rss", "github"):
+    # 信源管理页面只允许操作 rss、github、arxiv、hf_paper 类型
+    if source_data.type is not None and source_data.type not in ("rss", "github", "arxiv", "hf_paper"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="不支持从此入口修改该类型信源，请使用 X 监控页面"

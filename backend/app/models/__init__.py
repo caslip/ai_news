@@ -4,6 +4,7 @@ from app.models.article import Article
 from app.models.bookmark import Bookmark, Tag
 from app.models.strategy import Strategy, MonitorConfig
 
+from app.models.paper import Paper
 __all__ = [
     "User",
     "UserRole",
@@ -15,4 +16,5 @@ __all__ = [
     "Tag",
     "Strategy",
     "MonitorConfig",
+    "Paper",
 ]

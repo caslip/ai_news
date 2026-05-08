@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
+import { useAuthStore } from "@/stores/authStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -112,7 +114,7 @@ function formatNumber(num: number): string {
   return num.toString();
 }
 
-function TrendCard({ article, rank }: { article: Article; rank: number }) {
+function TrendCard({ article, rank, onBookmark }: { article: Article; rank: number; onBookmark?: (id: string) => void }) {
   const viralScore =
     article.fan_count > 0
       ? (
@@ -226,7 +228,7 @@ function TrendCard({ article, rank }: { article: Article; rank: number }) {
               </div>
 
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="h-8 w-8">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onBookmark?.(article.id)}>
                   <Bookmark className="h-4 w-4" />
                 </Button>
                 <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
@@ -244,6 +246,8 @@ function TrendCard({ article, rank }: { article: Article; rank: number }) {
 }
 
 export default function TrendingPage() {
+  const { isAuthenticated } = useAuthStore();
+
   const { data, isLoading } = useQuery({
     queryKey: ["trending"],
     queryFn: async () => {
@@ -262,6 +266,19 @@ export default function TrendingPage() {
       }
     },
   });
+
+  const handleBookmark = async (articleId: string) => {
+    if (!isAuthenticated) {
+      window.location.href = "/auth/login";
+      return;
+    }
+
+    try {
+      await apiClient.post("/api/favorites/", {}, { params: { article_id: articleId } });
+    } catch (error) {
+      console.error("Failed to bookmark:", error);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -315,8 +332,8 @@ export default function TrendingPage() {
             </Card>
 
             {/* Article List */}
-            {data?.items.map((article, index) => (
-              <TrendCard key={article.id} article={article} rank={index + 1} />
+            {data?.items.map((article: Article, index: number) => (
+              <TrendCard key={article.id} article={article} rank={index + 1} onBookmark={handleBookmark} />
             ))}
           </div>
         )}

@@ -14,6 +14,7 @@ from app.models.source import Source
 from app.schemas.source import SourceCreate, SourceUpdate, SourceResponse
 from app.schemas.user import UserResponse
 from app.routers.auth import get_current_user
+from app.services.scheduler import crawl_single_source_sync
 
 router = APIRouter(prefix="/monitor", tags=["监控"])
 
@@ -52,6 +53,10 @@ def create_monitor_keyword(
     db.add(source)
     db.commit()
     db.refresh(source)
+
+    # 创建关键词监控后立即触发一次爬取
+    crawl_single_source_sync(str(source.id), "keyword")
+
     return SourceResponse.model_validate(source)
 
 
@@ -167,6 +172,10 @@ def create_monitor_account(
     db.add(source)
     db.commit()
     db.refresh(source)
+
+    # 创建账号后立即触发一次爬取
+    crawl_single_source_sync(str(source.id), source_type)
+
     return SourceResponse.model_validate(source)
 
 

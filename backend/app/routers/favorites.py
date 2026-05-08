@@ -58,7 +58,7 @@ def list_favorites(
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def add_favorite(
-    article_id: str,
+    article_id: str = Query(..., description="文章ID"),
     db: Session = Depends(get_db),
     current_user: UserResponse = Depends(get_current_user),
 ):

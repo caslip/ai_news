@@ -10,9 +10,10 @@ class SourceType(str, Enum):
     TWITTER = "twitter"
     GITHUB = "github"
     NETTER = "nitter"
-    # 监控类型：type='keyword' 或 'account' 配合 monitor_type 字段
     KEYWORD = "keyword"
     ACCOUNT = "account"
+    ARXIV = "arxiv"       # 论文信源：Arxiv RSS
+    HF_PAPER = "hf_paper"  # 论文信源：HuggingFace Papers
 
 
 class SourceBase(BaseModel):

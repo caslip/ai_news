@@ -52,68 +52,6 @@ interface Bookmark {
   created_at: string;
 }
 
-const mockTags: Tag[] = [
-  { id: "1", name: "LLM", color: "#3b82f6" },
-  { id: "2", name: "开源", color: "#22c55e" },
-  { id: "3", name: "创业", color: "#f59e0b" },
-  { id: "4", name: "教程", color: "#8b5cf6" },
-  { id: "5", name: "工具", color: "#ec4899" },
-];
-
-// 使用固定日期避免 hydration mismatch
-const FIXED_NOW = "2026-04-25T10:00:00.000Z";
-
-const mockBookmarks: Bookmark[] = [
-  {
-    id: "1",
-    article_id: "1",
-    article: {
-      id: "1",
-      title: "GPT-5 发布：AGI 之路的重要里程碑",
-      url: "https://example.com/gpt5",
-      summary: "OpenAI 正式发布 GPT-5，带来了前所未有的推理能力...",
-      author: "@sama",
-      hot_score: 98.5,
-      tags: ["LLM", "OpenAI"],
-      fetched_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 60 * 2).toISOString(),
-    },
-    tags: [mockTags[0]],
-    created_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 60 * 3).toISOString(),
-  },
-  {
-    id: "2",
-    article_id: "2",
-    article: {
-      id: "2",
-      title: "Llama 4 开源：Meta 再次改变游戏规则",
-      url: "https://example.com/llama4",
-      summary: "Meta 发布了 Llama 4 开源模型...",
-      author: "zuck",
-      hot_score: 96.8,
-      tags: ["LLM", "开源"],
-      fetched_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 60 * 5).toISOString(),
-    },
-    tags: [mockTags[0], mockTags[1]],
-    created_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 60 * 6).toISOString(),
-  },
-  {
-    id: "3",
-    article_id: "3",
-    article: {
-      id: "3",
-      title: "小型 AI 创业团队如何在 6 个月内实现月收入 10 万",
-      url: "https://example.com/startup",
-      summary: "一个只有 3 个人的 AI 创业团队...",
-      author: "@startupfounder",
-      hot_score: 92.3,
-      tags: ["创业"],
-      fetched_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 60 * 8).toISOString(),
-    },
-    tags: [mockTags[2]],
-    created_at: new Date(new Date(FIXED_NOW).getTime() - 1000 * 60 * 60 * 10).toISOString(),
-  },
-];
-
 export default function FavoritesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
@@ -121,17 +59,34 @@ export default function FavoritesPage() {
   const [newTagName, setNewTagName] = useState("");
   const queryClient = useQueryClient();
 
-  const { data: bookmarks, isLoading } = useQuery({
+  const { data: bookmarksData, isLoading } = useQuery({
     queryKey: ["favorites", selectedTag],
     queryFn: async () => {
-      await new Promise((r) => setTimeout(r, 300));
-      return mockBookmarks;
+      const params = new URLSearchParams();
+      if (selectedTag) params.set("tag", selectedTag);
+      params.set("page_size", "100");
+      const res = await fetch(`/api/favorites?${params}`);
+      if (!res.ok) throw new Error("Failed to fetch favorites");
+      return res.json();
     },
   });
 
+  const { data: tagsData } = useQuery({
+    queryKey: ["favorite-tags"],
+    queryFn: async () => {
+      const res = await fetch("/api/favorites/tags");
+      if (!res.ok) throw new Error("Failed to fetch tags");
+      return res.json();
+    },
+  });
+
+  const bookmarks = bookmarksData?.items || [];
+  const tags = tagsData?.items || [];
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await new Promise((r) => setTimeout(r, 300));
+      const res = await fetch(`/api/favorites/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
       return id;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["favorites"] }),
@@ -139,21 +94,27 @@ export default function FavoritesPage() {
 
   const createTagMutation = useMutation({
     mutationFn: async (name: string) => {
-      await new Promise((r) => setTimeout(r, 300));
-      return { id: Math.random().toString(), name, color: "#6366f1" };
+      const res = await fetch("/api/favorites/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error("Failed to create tag");
+      return res.json();
     },
     onSuccess: () => {
       setIsAddTagDialogOpen(false);
       setNewTagName("");
+      queryClient.invalidateQueries({ queryKey: ["favorite-tags"] });
     },
   });
 
-  const filteredBookmarks = bookmarks?.filter((bm) => {
+  const filteredBookmarks = (bookmarks || []).filter((bm: Bookmark) => {
     const matchesSearch =
       !searchQuery ||
       bm.article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       bm.article.summary?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesTag = !selectedTag || bm.tags.some((t) => t.name === selectedTag);
+    const matchesTag = !selectedTag || bm.tags.some((t: Tag) => t.name === selectedTag);
     return matchesSearch && matchesTag;
   });
 
@@ -207,7 +168,7 @@ export default function FavoritesPage() {
               <FolderOpen className="h-4 w-4 mr-2" />
               全部收藏
             </Button>
-            {mockTags.map((tag) => (
+            {tags.map((tag: Tag) => (
               <Button
                 key={tag.id}
                 variant={selectedTag === tag.name ? "secondary" : "ghost"}
@@ -269,7 +230,7 @@ export default function FavoritesPage() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {filteredBookmarks?.map((bookmark) => (
+              {filteredBookmarks?.map((bookmark: Bookmark) => (
                 <Card key={bookmark.id} className="group hover:shadow-md transition-shadow">
                   <CardHeader className="pb-2">
                     <div className="flex items-start justify-between gap-3">
@@ -285,7 +246,7 @@ export default function FavoritesPage() {
                           </a>
                         </CardTitle>
                         <div className="flex items-center gap-2 mt-2">
-                          {bookmark.tags.map((tag) => (
+                          {bookmark.tags.map((tag: Tag) => (
                             <Badge
                               key={tag.id}
                               variant="secondary"

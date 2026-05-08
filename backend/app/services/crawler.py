@@ -96,6 +96,56 @@ class RSSCrawler:
         if not title or not url:
             return None
 
+        # Arxiv RSS 检测：从 feed.href 判断
+        import re
+        feed_href = getattr(feed, "href", "") or getattr(feed, "link", "") or ""
+        is_arxiv = "arxiv.org" in feed_href.lower()
+
+        if is_arxiv:
+            # 提取 arxiv_id：从链接 https://arxiv.org/abs/2604.21935 提取
+            arxiv_id = ""
+            m = re.search(r"arxiv\.org/abs/([0-9]+\.[0-9]+)", url)
+            if m:
+                arxiv_id = m.group(1)
+
+            # 从 description 剥离 arXiv:IDv1 Announce Type: ...\nAbstract: 前缀得到纯摘要
+            raw_desc = getattr(entry, "description", "") or ""
+            summary = raw_desc
+            m_abs = re.search(r"Abstract:\s*(.+?)(?:\n\n|$)", raw_desc, re.DOTALL)
+            if m_abs:
+                summary = m_abs.group(1).strip()
+            summary = re.sub(r"<[^>]+>", "", summary).strip()
+            if len(summary) > 2000:
+                summary = summary[:2000] + "..."
+
+            # 作者：从 <dc:creator> 提取
+            author = getattr(entry, "author", "") or getattr(entry, "dc_creator", "") or ""
+
+            # 分类标签
+            tags_list = [getattr(t, "term", str(t)) for t in getattr(entry, "tags", [])]
+            primary_category = tags_list[0] if tags_list else ""
+
+            content_hash = hashlib.sha256(f"{title}{url}".encode()).hexdigest()
+
+            return ParsedArticle(
+                title=title,
+                url=url,
+                summary=summary,
+                content="",
+                author=author,
+                published_at=published_at,
+                source_name=getattr(feed, "title", "") or "Arxiv",
+                source_type="arxiv",
+                raw_metadata={
+                    "arxiv_id": arxiv_id,
+                    "primary_category": primary_category,
+                    "categories": tags_list,
+                },
+                content_hash=content_hash,
+                fan_count=0,
+                engagement={"likes": 0, "retweets": 0, "comments": 0},
+            )
+
         # 获取摘要/内容
         summary = ""
         content = ""
@@ -674,7 +724,15 @@ class NitterCrawler:
         title = getattr(entry, "title", "") or ""
         description = getattr(entry, "description", "") or ""
         link = getattr(entry, "link", "") or ""
-        
+
+        # Nitter RSS title patterns:
+        #   "RT by @username:"  -> 用户转推，跳过
+        #   "R to @username:"   -> 他人回复用户，不是用户原创，跳过
+        #   "@username: ..."     -> 用户原创，保留
+        #   "Pinned: ..." / "Introducing ..." -> 用户原创，保留
+        if title.startswith("RT ") or title.startswith("R "):
+            return None
+
         # 移除 Nitter URL 后缀 "#m"，转换为真正的 Twitter URL
         if link:
             link = link.replace("#m", "")
@@ -810,6 +868,82 @@ class NitterCrawler:
                 continue
 
         return articles
+
+
+class HuggingFaceCrawler:
+    """HuggingFace Papers 爬虫（使用官方 JSON API）"""
+
+    def __init__(self, timeout: int = 30, sort: str = "hfulike", limit: int = 50):
+        self.timeout = timeout
+        self.sort = sort    # "hfulike" | "trending"
+        self.limit = limit
+
+    def fetch_papers_sync(self) -> list[dict]:
+        """同步抓取 HF Papers"""
+        import requests
+        url = f"https://huggingface.co/api/papers?sort={self.sort}&limit={self.limit}"
+        response = requests.get(url, headers={"User-Agent": "AI-News-Aggregator/1.0"}, timeout=self.timeout)
+        response.raise_for_status()
+        papers = response.json()
+
+        results = []
+        for paper in papers:
+            try:
+                parsed = self._parse_paper(paper)
+                if parsed:
+                    results.append(parsed)
+            except Exception:
+                continue
+        return results
+
+    def _parse_paper(self, paper: dict) -> Optional[dict]:
+        paper_id = paper.get("id", "")
+        title = paper.get("title", "")
+
+        authors_raw = paper.get("authors", [])
+        if isinstance(authors_raw, list) and len(authors_raw) > 0:
+            first = authors_raw[0]
+            author = first.get("name", str(first)) if isinstance(first, dict) else str(first)
+            if len(authors_raw) > 1:
+                author += " et al."
+        else:
+            author = ""
+        author = author[:500]
+
+        summary = paper.get("summary", "") or ""
+        if len(summary) > 2000:
+            summary = summary[:2000] + "..."
+
+        url = paper.get("projectPage") or f"https://arxiv.org/abs/{paper_id}"
+
+        published_str = paper.get("publishedAt")
+        published_at = None
+        if published_str:
+            try:
+                published_at = datetime.fromisoformat(published_str.replace("Z", "+00:00"))
+            except Exception:
+                pass
+
+        upvotes = paper.get("upvotes", 0) or 0
+        content_hash = hashlib.sha256(f"{title}{url}".encode()).hexdigest()
+
+        return {
+            "hf_paper_id": paper_id,
+            "title": title,
+            "url": url,
+            "summary": summary,
+            "author": author,
+            "upvotes": upvotes,
+            "engagement": {"likes": upvotes, "retweets": 0, "comments": 0},
+            "thumbnail_url": paper.get("thumbnailUrl"),
+            "github_repo": paper.get("githubRepo"),
+            "project_page": paper.get("projectPage"),
+            "hf_url": f"https://huggingface.co/papers/{paper_id}",
+            "categories": [],
+            "tags": [],
+            "published_at": published_at,
+            "content_hash": content_hash,
+        }
 
 
 def crawl_source(source_config: dict) -> list[dict]:

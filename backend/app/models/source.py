@@ -11,8 +11,10 @@ class SourceType(str, enum.Enum):
     TWITTER = "twitter"
     GITHUB = "github"
     NETTER = "nitter"
-    # 监控类型：通过 type='keyword' 表示关键词监控，type='account' 表示账号监控
-    # 配合 monitor_type 字段区分：'keyword' | 'account' | null（null = 普通信源）
+    KEYWORD = "keyword"
+    ACCOUNT = "account"
+    ARXIV = "arxiv"       # 论文信源：Arxiv RSS
+    HF_PAPER = "hf_paper"  # 论文信源：HuggingFace Papers
 
 
 class Source(Base):
@@ -33,6 +35,7 @@ class Source(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     articles = relationship("Article", back_populates="source", cascade="all, delete-orphan")
+    papers = relationship("Paper", back_populates="source", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_sources_type", "type"),

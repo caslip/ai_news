@@ -1,7 +1,7 @@
 import axios from "axios";
 import { useAuthStore } from "@/stores/authStore";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -11,13 +11,87 @@ export const apiClient = axios.create({
 });
 
 // ============================================================
+// 论文 API
+// ============================================================
+
+export interface Paper {
+  id: string;
+  source_id?: string;
+  arxiv_id?: string;
+  hf_paper_id?: string;
+  title: string;
+  url: string;
+  summary?: string;
+  author?: string;
+  upvotes: number;
+  thumbnail_url?: string;
+  github_repo?: string;
+  project_page?: string;
+  hf_url?: string;
+  primary_category?: string;
+  categories: string[];
+  tags: string[];
+  published_at?: string;
+  fetched_at: string;
+  created_at: string;
+}
+
+export interface PaperListResponse {
+  items: Paper[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface PaperStats {
+  today_count: number;
+  week_count: number;
+  month_count: number;
+  total_count: number;
+}
+
+export const getPapers = async (params?: {
+  source_type?: string;
+  category?: string;
+  min_upvotes?: number;
+  time_range?: string;
+  sort?: string;
+  q?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<PaperListResponse> => {
+  const cleanParams: Record<string, string | number> = {};
+  if (params) {
+    const num = (v: unknown) => {
+      const n = typeof v === "number" ? v : parseInt(String(v), 10);
+      return isNaN(n) ? undefined : n;
+    };
+    if (params.page !== undefined) { const v = num(params.page); if (v !== undefined) cleanParams.page = v; }
+    if (params.page_size !== undefined) { const v = num(params.page_size); if (v !== undefined) cleanParams.page_size = v; }
+    if (params.min_upvotes !== undefined) { const v = num(params.min_upvotes); if (v !== undefined) cleanParams.min_upvotes = v; }
+    if (params.source_type) cleanParams.source_type = params.source_type;
+    if (params.category) cleanParams.category = params.category;
+    if (params.time_range) cleanParams.time_range = params.time_range;
+    if (params.sort) cleanParams.sort = params.sort;
+    if (params.q) cleanParams.q = params.q;
+  }
+  const response = await apiClient.get<PaperListResponse>("/api/papers/", { params: cleanParams });
+  return response.data;
+};
+
+export const getPaperStats = async (): Promise<PaperStats> => {
+  const response = await apiClient.get<PaperStats>("/api/papers/stats");
+  return response.data;
+};
+
+// ============================================================
 // 信源管理 API
 // ============================================================
 
 export interface Source {
   id: string;
   name: string;
-  type: "rss" | "twitter" | "github" | "nitter" | "keyword" | "account";
+  type: "rss" | "twitter" | "github" | "nitter" | "keyword" | "account" | "arxiv" | "hf_paper";
   config: Record<string, any>;
   is_active: boolean;
   last_fetched_at?: string;
@@ -39,7 +113,7 @@ export interface SourceListResponse {
 // X 账号（nitter/twitter）和监控配置（keyword/account）通过 X 监控页面创建
 export interface SourceCreate {
   name: string;
-  type: "rss" | "github";
+  type: "rss" | "github" | "arxiv" | "hf_paper";
   config: Record<string, any>;
   value?: string;
   params?: Record<string, unknown>;
