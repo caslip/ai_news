@@ -19,5 +19,4 @@ jobs:
           script: |
             cd ~/ai_news
             git pull origin main
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-            docker image prune -f
+            uvicorn app.main:app --host 0.0.0.0 --port 8000
