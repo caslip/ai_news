@@ -18,7 +18,9 @@ jobs:
           key: ${{ secrets.SERVER_SSH_SECRET }}
           script: |
             cd ~/ai_news
-            git pull origin main
+            rm -f .git/index.lock .git/*.lock 2>/dev/null || true
+            git fetch origin main
+            git reset --hard origin/main
             source .venv/bin/activate
             cd backend
             pkill -f "uvicorn app.main:app" || true
