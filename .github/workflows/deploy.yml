@@ -63,6 +63,9 @@ jobs:
             pkill -f "uvicorn app.main:app" 2>/dev/null || true
             sleep 2
 
+            echo "旧进程杀死完毕..."
+            echo "尝试启动新进程..."
+
             # 以后台 nohup 方式启动
             cd "$APP_DIR/backend"
             source .venv/bin/activate
