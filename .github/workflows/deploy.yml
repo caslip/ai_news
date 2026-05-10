@@ -101,7 +101,7 @@ jobs:
               echo "[DEBUG] 发现旧进程 PID: $OLD_PID"
               ps aux | grep uvicorn | grep -v grep || true
               echo "[DEBUG] 执行 kill -9 $OLD_PID"
-              echo "$OLD_PID" | xargs kill -9 2>/dev/null || true
+              (echo "$OLD_PID" | xargs kill -9 2>/dev/null) || true
               sleep 2
             else
               echo "[DEBUG] 无旧进程，跳过 kill"
