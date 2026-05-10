@@ -95,14 +95,19 @@ jobs:
             fi
             echo "[DEBUG] app 目录内容:"
             ls -la app/
-            # 先杀掉旧进程
-            OLD_PID=$(pgrep -f "uvicorn.*app.main:app" 2>/dev/null || true)
+            # 先杀掉旧进程（使用 TERM 信号优雅关闭，兜底用 KILL）
+            OLD_PID=$(pgrep -f "uvicorn.*app.main:app" || true)
             if [ -n "$OLD_PID" ]; then
               echo "[DEBUG] 发现旧进程 PID: $OLD_PID"
               ps aux | grep uvicorn | grep -v grep || true
-              echo "[DEBUG] 执行 kill -9 $OLD_PID"
-              (echo "$OLD_PID" | xargs kill -9 2>/dev/null) || true
+              echo "[DEBUG] 执行 kill -TERM $OLD_PID（优雅关闭）"
+              kill -TERM $OLD_PID 2>/dev/null
               sleep 2
+              echo "[DEBUG] 检查进程是否已退出..."
+              if kill -0 $OLD_PID 2>/dev/null; then
+                echo "[DEBUG] 进程未响应 TERM，执行 kill -9 $OLD_PID"
+                kill -9 $OLD_PID 2>/dev/null
+              fi
             else
               echo "[DEBUG] 无旧进程，跳过 kill"
             fi
