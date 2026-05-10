@@ -1,0 +1,32 @@
+# Environment variables (NEVER commit these)
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+*.egg
+
+# Node
+node_modules/
+.next/
+out/
+
+# Logs
+*.log
+debug.log
+
+# IDE
+.cursor/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

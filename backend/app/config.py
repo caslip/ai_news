@@ -22,6 +22,20 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3001",
     ]
 
+    @property
+    def resolved_allowed_origins(self) -> list[str]:
+        defaults = [
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:3001",
+        ]
+        env_val = os.getenv("ALLOWED_ORIGINS", "")
+        if env_val:
+            parsed = [o.strip() for o in env_val.split(",") if o.strip()]
+            return list(dict.fromkeys(parsed + defaults))
+        return defaults
+
     class Config:
         env_file = ".env"
         extra = "allow"

@@ -279,15 +279,7 @@ export default function SourcesPage() {
 
                     <div className="space-y-2">
                       <Label htmlFor="config">配置</Label>
-                      {newSource.type === "nitter" ? (
-                        <Input
-                          id="config"
-                          placeholder="输入 Twitter 用户名，如 Khazix0918"
-                          value={newSource.username}
-                          onChange={(e) => setNewSource({ ...newSource, username: e.target.value })}
-                        />
-                      ) : (
-                        <Textarea
+                      <Textarea
                           id="config"
                           placeholder={
                             newSource.type === "rss"
@@ -298,7 +290,6 @@ export default function SourcesPage() {
                           onChange={(e) => setNewSource({ ...newSource, config: e.target.value })}
                           className="font-mono text-sm"
                         />
-                      )}
                     </div>
                   </div>
 
