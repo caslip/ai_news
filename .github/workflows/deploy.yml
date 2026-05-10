@@ -16,6 +16,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: root
           password: ${{ secrets.SERVER_PASSWORD }}
+          timeout: 15m
           script: |
             set -e
 
@@ -91,3 +92,4 @@ jobs:
             echo ""
             echo "[WARN] 健康检查超时，查看最近日志:"
             tail -20 "$APP_DIR/backend/uvicorn.log" 2>/dev/null || echo "无日志文件"
+            exit 1
