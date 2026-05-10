@@ -62,8 +62,14 @@ jobs:
             # --- 6. 启动后端服务 ---
             echo "[6/6] 启动后端服务..."
             # 先杀掉旧进程
-            pkill -f "uvicorn app.main:app" 2>/dev/null || true
-            sleep 2
+            OLD_PID=$(pgrep -f "uvicorn.*app.main:app" 2>/dev/null || true)
+            if [ -n "$OLD_PID" ]; then
+              echo "杀死旧进程: $OLD_PID"
+              echo "$OLD_PID" | xargs kill -9 2>/dev/null || true
+              sleep 2
+            else
+              echo "无旧进程，跳过"
+            fi
 
             echo "旧进程杀死完毕..."
             echo "尝试启动新进程..."
@@ -71,7 +77,9 @@ jobs:
             # 以后台 nohup 方式启动
             cd "$APP_DIR/backend"
             source .venv/bin/activate
-            nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 >> uvicorn.log 2>&1 &
+            echo "[DEBUG] pwd: $(pwd)"
+            echo "[DEBUG] 启动 uvicorn..."
+            nohup .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 >> uvicorn.log 2>&1 &
 
             # 等待服务启动
             for i in $(seq 1 20); do
