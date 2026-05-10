@@ -29,61 +29,102 @@ jobs:
 
             # --- 2. 创建目录并拉取代码（clone 走服务器网络，避免 runner 访问 github.com 超时）---
             echo "[2/6] 拉取最新代码..."
+            echo "[DEBUG] APP_DIR=$APP_DIR"
+            echo "[DEBUG] 检查 .git 目录是否存在..."
             if [ -d "$APP_DIR/.git" ]; then
               cd "$APP_DIR"
+              echo "[DEBUG] .git 存在，执行 git pull..."
               git remote set-url origin https://ghfast.top/https://github.com/caslip/ai_news.git
+              git remote -v
               git reset --hard HEAD
               git clean -fd
+              echo "[DEBUG] git fetch origin main..."
               git fetch origin main
+              echo "[DEBUG] 当前 HEAD: $(git rev-parse HEAD)"
+              echo "[DEBUG] 远程 main: $(git rev-parse origin/main)"
               git reset --hard origin/main
+              echo "[DEBUG] 重置完毕，当前 HEAD: $(git rev-parse HEAD)"
             else
+              echo "[DEBUG] .git 不存在，执行全新 clone..."
               rm -rf "$APP_DIR"
               git clone https://ghfast.top/https://github.com/caslip/ai_news.git "$APP_DIR"
               cd "$APP_DIR"
+              echo "[DEBUG] clone 完毕，文件列表:"
+              ls -la
             fi
 
             # --- 3. 配置 .env 环境变量 ---
             echo "[3/6] 配置环境变量..."
+            echo "[DEBUG] 写入 .env 到 $APP_DIR/backend/.env"
             echo 'SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}' > "$APP_DIR/backend/.env"
             echo 'ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}' >> "$APP_DIR/backend/.env"
+            echo "[DEBUG] .env 内容:"
+            cat "$APP_DIR/backend/.env"
+            echo "[DEBUG] .env 写入完毕"
             
 
             # --- 4. 创建虚拟环境并安装依赖 ---
             echo "[4/6] 创建虚拟环境并安装 Python 依赖..."
             cd "$APP_DIR/backend"
+            echo "[DEBUG] 当前目录: $(pwd)"
+            echo "[DEBUG] Python 版本: $(python3 --version)"
+            echo "[DEBUG] 检查 .venv 是否存在: $([ -d .venv ] && echo '存在' || echo '不存在')"
             python3 -m venv .venv
+            echo "[DEBUG] venv 创建完毕，bin 目录:"
+            ls -la .venv/bin/ | head -10
+            echo "[DEBUG] 激活 venv..."
             source .venv/bin/activate
+            echo "[DEBUG] venv python: $(which python)"
+            echo "[DEBUG] pip 版本: $(pip --version)"
+            echo "[DEBUG] 开始安装 requirements.txt..."
             pip install --upgrade pip -q -i https://mirrors.aliyun.com/pypi/simple/
             pip install -r requirements.txt -q -i https://mirrors.aliyun.com/pypi/simple/
+            echo "[DEBUG] 安装完成，已安装包数量: $(pip list | wc -l)"
 
             # --- 5. 数据库（SQLite 无需迁移，启动时自动创建表） ---
             echo "[5/6] 数据库就绪 (SQLite)..."
 
             # --- 6. 启动后端服务 ---
             echo "[6/6] 启动后端服务..."
+            echo "[DEBUG] 当前目录: $(pwd)"
+            echo "[DEBUG] 检查 backend 目录是否存在: $([ -d app ] && echo '存在' || echo '不存在')"
+            if [ ! -d "app" ]; then
+              echo "[ERROR] backend/app 目录不存在!"
+              ls -la
+              exit 1
+            fi
+            echo "[DEBUG] app 目录内容:"
+            ls -la app/
             # 先杀掉旧进程
             OLD_PID=$(pgrep -f "uvicorn.*app.main:app" 2>/dev/null || true)
             if [ -n "$OLD_PID" ]; then
-              echo "杀死旧进程: $OLD_PID"
+              echo "[DEBUG] 发现旧进程 PID: $OLD_PID"
+              ps aux | grep uvicorn | grep -v grep || true
+              echo "[DEBUG] 执行 kill -9 $OLD_PID"
               echo "$OLD_PID" | xargs kill -9 2>/dev/null || true
               sleep 2
             else
-              echo "无旧进程，跳过"
+              echo "[DEBUG] 无旧进程，跳过 kill"
             fi
 
-            echo "旧进程杀死完毕..."
-            echo "尝试启动新进程..."
-
-            # 以后台 nohup 方式启动
-            cd "$APP_DIR/backend"
-            source .venv/bin/activate
-            echo "[DEBUG] pwd: $(pwd)"
+            echo "[DEBUG] 准备启动 uvicorn..."
+            echo "[DEBUG] venv python: $(pwd)/.venv/bin/python"
+            echo "[DEBUG] uvicorn 模块检查: $(.venv/bin/python -c 'import uvicorn; print(uvicorn.__version__)' 2>&1)"
+            echo "[DEBUG] app.main 模块检查: $(.venv/bin/python -c 'import app.main; print("OK")' 2>&1)"
             echo "[DEBUG] 启动 uvicorn..."
             nohup .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 >> uvicorn.log 2>&1 &
+            sleep 3
+            echo "[DEBUG] uvicorn 启动后，检查进程:"
+            ps aux | grep uvicorn | grep -v grep || echo "[DEBUG] 未发现 uvicorn 进程!"
+            echo "[DEBUG] uvicorn.log 初始内容:"
+            cat uvicorn.log 2>/dev/null || echo "[DEBUG] 日志文件为空或不存在"
 
             # 等待服务启动
             for i in $(seq 1 20); do
-              if curl -sf http://localhost:8000/api/health > /dev/null 2>&1; then
+              echo "[DEBUG] 健康检查尝试 #$i..."
+              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/api/health 2>&1 || echo "000")
+              echo "[DEBUG] HTTP 状态码: $HTTP_CODE"
+              if [ "$HTTP_CODE" = "200" ]; then
                 echo ""
                 echo "============================================"
                 echo "  部署成功！"
@@ -99,5 +140,7 @@ jobs:
 
             echo ""
             echo "[WARN] 健康检查超时，查看最近日志:"
-            tail -20 "$APP_DIR/backend/uvicorn.log" 2>/dev/null || echo "无日志文件"
+            tail -30 uvicorn.log 2>/dev/null || echo "无日志文件"
+            echo "[DEBUG] 超时时刻的进程状态:"
+            ps aux | grep uvicorn | grep -v grep || echo "[DEBUG] 无 uvicorn 进程"
             exit 1
