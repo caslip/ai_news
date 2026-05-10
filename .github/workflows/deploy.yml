@@ -84,43 +84,35 @@ jobs:
             # --- 5. 数据库（SQLite 无需迁移，启动时自动创建表） ---
             echo "[5/6] 数据库就绪 (SQLite)..."
 
+            # --- 5.1. 确保 systemd service 文件存在 ---
+            echo "[5.5/6] 配置 systemd service..."
+            cat > /etc/systemd/system/ai_news.service << 'SERVICE_EOF'
+            [Unit]
+            Description=AI News Backend
+            After=network.target
+
+            [Service]
+            Type=simple
+            User=root
+            WorkingDirectory=/root/ai_news/backend
+            EnvironmentFile=/root/ai_news/backend/.env
+            ExecStart=/root/ai_news/backend/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+            Restart=always
+            RestartSec=5
+            StandardOutput=append:/root/ai_news/backend/uvicorn.log
+            StandardError=append:/root/ai_news/backend/uvicorn.log
+
+            [Install]
+            WantedBy=multi-user.target
+            SERVICE_EOF
+            systemctl daemon-reload
+            systemctl enable ai_news
+            echo "[DEBUG] systemd service 已配置并启用"
+
             # --- 6. 启动后端服务 ---
             echo "[6/6] 启动后端服务..."
-            echo "[DEBUG] 当前目录: $(pwd)"
-            echo "[DEBUG] 检查 backend 目录是否存在: $([ -d app ] && echo '存在' || echo '不存在')"
-            if [ ! -d "app" ]; then
-              echo "[ERROR] backend/app 目录不存在!"
-              ls -la
-              exit 1
-            fi
-            echo "[DEBUG] app 目录内容:"
-            ls -la app/
-            # --- 启动时写入 pidfile ---
-            PIDFILE="$APP_DIR/backend/uvicorn.pid"
-
-            # 停止旧进程
-            if [ -f "$PIDFILE" ]; then
-              OLD_PID=$(cat "$PIDFILE")
-              if kill -0 "$OLD_PID" 2>/dev/null; then
-                echo "[DEBUG] 停止旧进程 PID: $OLD_PID"
-                kill -TERM "$OLD_PID" 2>/dev/null || true
-                sleep 2
-                kill -0 "$OLD_PID" 2>/dev/null && kill -9 "$OLD_PID" 2>/dev/null || true
-              fi
-              rm -f "$PIDFILE"
-            fi
-
-            # 启动新进程并记录 PID
-            echo "[DEBUG] 启动 uvicorn..."
-            nohup .venv/bin/python -m uvicorn app.main:app \
-              --host 0.0.0.0 --port 8000 >> uvicorn.log 2>&1 &
-            echo $! > "$PIDFILE"
-            echo "[DEBUG] 新进程 PID: $(cat $PIDFILE)"
+            systemctl restart ai_news
             sleep 3
-            echo "[DEBUG] uvicorn 启动后，检查进程:"
-            ps aux | grep uvicorn | grep -v grep || echo "[DEBUG] 未发现 uvicorn 进程!"
-            echo "[DEBUG] uvicorn.log 初始内容:"
-            cat uvicorn.log 2>/dev/null || echo "[DEBUG] 日志文件为空或不存在"
 
             # 等待服务启动
             for i in $(seq 1 20); do
@@ -143,7 +135,7 @@ jobs:
 
             echo ""
             echo "[WARN] 健康检查超时，查看最近日志:"
-            tail -30 uvicorn.log 2>/dev/null || echo "无日志文件"
+            journalctl -u ai_news -n 50 --no-pager
             echo "[DEBUG] 超时时刻的进程状态:"
-            ps aux | grep uvicorn | grep -v grep || echo "[DEBUG] 无 uvicorn 进程"
+            systemctl status ai_news --no-pager || true
             exit 1
