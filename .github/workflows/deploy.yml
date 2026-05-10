@@ -95,29 +95,27 @@ jobs:
             fi
             echo "[DEBUG] app 目录内容:"
             ls -la app/
-            # 先杀掉旧进程（使用 TERM 信号优雅关闭，兜底用 KILL）
-            OLD_PID=$(pgrep -f "uvicorn.*app.main:app" || true)
-            if [ -n "$OLD_PID" ]; then
-              echo "[DEBUG] 发现旧进程 PID: $OLD_PID"
-              ps aux | grep uvicorn | grep -v grep || true
-              echo "[DEBUG] 执行 kill -TERM $OLD_PID（优雅关闭）"
-              kill -TERM $OLD_PID 2>/dev/null
-              sleep 2
-              echo "[DEBUG] 检查进程是否已退出..."
-              if kill -0 $OLD_PID 2>/dev/null; then
-                echo "[DEBUG] 进程未响应 TERM，执行 kill -9 $OLD_PID"
-                kill -9 $OLD_PID 2>/dev/null
+            # --- 启动时写入 pidfile ---
+            PIDFILE="$APP_DIR/backend/uvicorn.pid"
+
+            # 停止旧进程
+            if [ -f "$PIDFILE" ]; then
+              OLD_PID=$(cat "$PIDFILE")
+              if kill -0 "$OLD_PID" 2>/dev/null; then
+                echo "[DEBUG] 停止旧进程 PID: $OLD_PID"
+                kill -TERM "$OLD_PID" 2>/dev/null || true
+                sleep 2
+                kill -0 "$OLD_PID" 2>/dev/null && kill -9 "$OLD_PID" 2>/dev/null || true
               fi
-            else
-              echo "[DEBUG] 无旧进程，跳过 kill"
+              rm -f "$PIDFILE"
             fi
 
-            echo "[DEBUG] 准备启动 uvicorn..."
-            echo "[DEBUG] venv python: $(pwd)/.venv/bin/python"
-            echo "[DEBUG] uvicorn 模块检查: $(.venv/bin/python -c 'import uvicorn; print(uvicorn.__version__)' 2>&1)"
-            echo "[DEBUG] app.main 模块检查: $(.venv/bin/python -c 'import app.main; print("OK")' 2>&1)"
+            # 启动新进程并记录 PID
             echo "[DEBUG] 启动 uvicorn..."
-            nohup .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 >> uvicorn.log 2>&1 &
+            nohup .venv/bin/python -m uvicorn app.main:app \
+              --host 0.0.0.0 --port 8000 >> uvicorn.log 2>&1 &
+            echo $! > "$PIDFILE"
+            echo "[DEBUG] 新进程 PID: $(cat $PIDFILE)"
             sleep 3
             echo "[DEBUG] uvicorn 启动后，检查进程:"
             ps aux | grep uvicorn | grep -v grep || echo "[DEBUG] 未发现 uvicorn 进程!"
