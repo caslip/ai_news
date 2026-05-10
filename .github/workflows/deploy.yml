@@ -54,10 +54,8 @@ jobs:
             pip install --upgrade pip -q -i https://mirrors.aliyun.com/pypi/simple/
             pip install -r requirements.txt -q -i https://mirrors.aliyun.com/pypi/simple/
 
-            # --- 5. 数据库迁移 ---
-            echo "[5/6] 执行数据库迁移..."
-            source .venv/bin/activate
-            python -m alembic upgrade head || true
+            # --- 5. 数据库（SQLite 无需迁移，启动时自动创建表） ---
+            echo "[5/6] 数据库就绪 (SQLite)..."
 
             # --- 6. 启动后端服务 ---
             echo "[6/6] 启动后端服务..."
