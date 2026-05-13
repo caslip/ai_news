@@ -8,7 +8,7 @@ from fastapi.security import OAuth2PasswordBearer
 import uuid
 import httpx
 from app.models.user import User, UserRole, OAuthProvider
-from app.schemas.user import UserCreate, UserRegisterRequest, UserResponse, TokenData
+from app.news.schemas.user import UserCreate, UserRegisterRequest, UserResponse, TokenData
 from app.config import settings
 from app.database import get_db
 

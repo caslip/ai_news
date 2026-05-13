@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/authStore";
@@ -20,6 +20,14 @@ export default function RegisterPage() {
   const [nickname, setNickname] = useState("");
   const [localError, setLocalError] = useState("");
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+    if (token) {
+      router.replace("/");
+    }
+  }, [router]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
@@ -35,17 +43,31 @@ export default function RegisterPage() {
       return;
     }
 
+    const returnTo = new URLSearchParams(window.location.search).get("returnTo");
     const success = await register(email, password, nickname);
     if (success) {
-      router.push("/");
+      if (returnTo) {
+        const { token, user } = useAuthStore.getState();
+        const params = new URLSearchParams({ token: token || "", returnTo });
+        if (user) {
+          params.set("userId", user.id);
+          params.set("email", user.email);
+          params.set("nickname", user.nickname);
+          params.set("role", user.role);
+          if (user.avatar_url) params.set("avatar_url", user.avatar_url);
+        }
+        window.location.href = `${returnTo}?${params.toString()}`;
+      } else {
+        router.push("/");
+      }
     }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4">
       <div className="w-full max-w-md">
-        <Link 
-          href="/" 
+        <Link
+          href="/"
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />

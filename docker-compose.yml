@@ -4,6 +4,30 @@
 #   Production: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 services:
+  # Frontend Writer (Next.js)
+  frontend-writer:
+    build:
+      context: ./frontend_writer
+      dockerfile: Dockerfile
+    container_name: ai-news-frontend-writer
+    ports:
+      - "${FRONTEND_WRITER_PORT:-3002}:3000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - NEXT_PUBLIC_API_URL=${API_URL:-http://backend:8000}
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - ai-news-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
   # Frontend (Next.js)
   frontend:
     build:

@@ -2,6 +2,16 @@
 # Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 services:
+  frontend-writer:
+    build:
+      context: ./frontend_writer
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: production
+    environment:
+      - NODE_ENV=production
+    restart: always
+
   frontend:
     build:
       context: ./frontend

@@ -228,13 +228,22 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    // 如果是 logout 请求本身失败，不触发 logout 循环
     if (error.config?.url?.includes("/auth/logout")) {
       return Promise.reject(error);
     }
     if (error.response?.status === 401) {
-      useAuthStore.getState().logout();
+      const { isAuthenticated, logout } = useAuthStore.getState();
+      // TODO: 暂时禁用，登录失败时不要刷新页面，方便调试
+      // if (isAuthenticated) {
+      //   void logout();
+      // }
     }
+    console.error("[API Error]", error.config?.method?.toUpperCase(), error.config?.url, {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message,
+    });
     return Promise.reject(error);
   }
 );

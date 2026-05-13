@@ -114,13 +114,16 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: true,
           });
           return true;
-        } catch {
-          delete apiClient.defaults.headers.common["Authorization"];
-          set({
-            user: null,
-            token: null,
-            isAuthenticated: false,
-          });
+        } catch (error: unknown) {
+          const status = (error as { response?: { status?: number } })?.response?.status;
+          if (status === 401) {
+            delete apiClient.defaults.headers.common["Authorization"];
+            set({
+              user: null,
+              token: null,
+              isAuthenticated: false,
+            });
+          }
           return false;
         }
       },
@@ -138,8 +141,17 @@ export const useAuthStore = create<AuthState>()(
       onRehydrateStorage: () => (state) => {
         if (state?.token) {
           apiClient.defaults.headers.common["Authorization"] = `Bearer ${state.token}`;
-          // 用服务端数据校正本地缓存（头像、角色等）
-          void state.fetchCurrentUser();
+        } else {
+          const cookies = document.cookie.split("; ");
+          const ssoEntry = cookies.find((c) => c.startsWith("ai_sso_token="));
+          if (ssoEntry) {
+            const cookieToken = ssoEntry.split("=")[1];
+            if (cookieToken) {
+              apiClient.defaults.headers.common["Authorization"] = `Bearer ${cookieToken}`;
+              state?.set({ token: cookieToken, isAuthenticated: true });
+              state?.fetchCurrentUser();
+            }
+          }
         }
       },
     }

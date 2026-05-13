@@ -26,6 +26,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
+import { PlatformSwitcher } from "@/components/layout/PlatformSwitcher";
 
 const navItems = [
   { href: "/", label: "热点资讯", icon: Home },
@@ -119,6 +120,18 @@ export function Sidebar({ collapsed, onToggle, user }: SidebarProps) {
           );
         })}
       </nav>
+
+      {/* Platform Switcher */}
+      {!collapsed && (
+        <div className="px-2 pb-2">
+          <PlatformSwitcher currentPlatform="news" />
+        </div>
+      )}
+      {collapsed && (
+        <div className="px-2 pb-2">
+          <PlatformSwitcher currentPlatform="news" collapsed />
+        </div>
+      )}
 
       {/* User */}
       <div className="border-t p-4">

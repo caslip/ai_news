@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/authStore";
@@ -17,24 +17,70 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+    if (token) {
+      const userId = params.get("userId");
+      const email = params.get("email");
+      const nickname = params.get("nickname");
+      const role = params.get("role");
+      const avatarUrl = params.get("avatar_url");
+
+      if (userId && email && nickname) {
+        const user = {
+          id: userId,
+          email,
+          nickname,
+          role: (role as "user" | "admin") || "user",
+          avatar_url: avatarUrl || undefined,
+          push_config: {},
+          created_at: "",
+        };
+        document.cookie = `ai_sso_token=${token}; path=/; SameSite=Lax; max-age=${7 * 24 * 60 * 60}`;
+        useAuthStore.setState({ token, user, isAuthenticated: true });
+      }
+
+      router.replace("/");
+    }
+  }, [router]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
+    const returnTo = new URLSearchParams(window.location.search).get("returnTo");
     const success = await login(email, password);
     if (success) {
-      router.push("/");
+      if (returnTo) {
+        const { token, user } = useAuthStore.getState();
+        const params = new URLSearchParams({ token: token || "", returnTo });
+        if (user) {
+          params.set("userId", user.id);
+          params.set("email", user.email);
+          params.set("nickname", user.nickname);
+          params.set("role", user.role);
+          if (user.avatar_url) params.set("avatar_url", user.avatar_url);
+        }
+        window.location.href = `${returnTo}?${params.toString()}`;
+      } else {
+        router.push("/");
+      }
     }
   };
 
   const handleGitHubLogin = () => {
-    window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/auth/oauth/github`;
+    const returnTo = new URLSearchParams(window.location.search).get("returnTo");
+    const callbackUrl = returnTo
+      ? `${window.location.origin}/auth/login?returnTo=${encodeURIComponent(returnTo)}`
+      : `${window.location.origin}/auth/login`;
+    window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/auth/oauth/github?callback=${encodeURIComponent(callbackUrl)}`;
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4">
       <div className="w-full max-w-md">
-        <Link 
-          href="/" 
+        <Link
+          href="/"
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />

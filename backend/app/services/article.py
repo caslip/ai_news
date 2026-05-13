@@ -4,7 +4,7 @@ from typing import Optional
 import uuid
 from app.models.article import Article
 from app.models.source import Source
-from app.schemas.article import ArticleCreate, ArticleUpdate, ArticleListResponse
+from app.news.schemas.article import ArticleCreate, ArticleUpdate, ArticleListResponse
 
 
 class ArticleService:
