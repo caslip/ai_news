@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient, getPapers, Paper } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -556,6 +556,12 @@ export default function HomePage() {
   const [page, setPage] = useState(1);
   const [paperPage, setPaperPage] = useState(1);
   const { isAuthenticated } = useAuthStore();
+
+  // DEBUG: 检查环境变量
+  useEffect(() => {
+    console.log("[DEBUG] NEXT_PUBLIC_API_URL:", process.env.NEXT_PUBLIC_API_URL);
+    console.log("[DEBUG] apiClient baseURL:", apiClient.defaults.baseURL);
+  }, []);
 
   // 根据 tab 确定 source_type 参数
   const sourceTypeMap: Record<TabId, string | undefined> = {
