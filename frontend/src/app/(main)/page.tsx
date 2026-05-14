@@ -557,10 +557,12 @@ export default function HomePage() {
   const [paperPage, setPaperPage] = useState(1);
   const { isAuthenticated } = useAuthStore();
 
-  // DEBUG: 检查环境变量
+  // DEBUG: 检查环境变量 - 页面可见
   useEffect(() => {
-    console.log("[DEBUG] NEXT_PUBLIC_API_URL:", process.env.NEXT_PUBLIC_API_URL);
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    console.log("[DEBUG] NEXT_PUBLIC_API_URL:", apiUrl);
     console.log("[DEBUG] apiClient baseURL:", apiClient.defaults.baseURL);
+    document.title = `[DEBUG] ${apiUrl || "undefined"} | AI News`;
   }, []);
 
   // 根据 tab 确定 source_type 参数
