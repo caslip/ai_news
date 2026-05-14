@@ -53,6 +53,8 @@ class Settings(BaseSettings):
         "https://ai-news-nine-phi.vercel.app",
         # Vercel preview deployments (wildcard pattern not supported, list common patterns)
         "https://ai-news-git-main-caslips-projects.vercel.app",
+        # Backend API domain
+        "https://roshxopx.cn",
     ]
 
     @field_validator("allowed_origins", mode="before")
