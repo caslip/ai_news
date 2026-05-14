@@ -3,6 +3,9 @@ import { useAuthStore } from "@/stores/authStore";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 
+// DEBUG: 临时输出 API URL
+console.log("[DEBUG] API_BASE_URL:", API_BASE_URL);
+
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
