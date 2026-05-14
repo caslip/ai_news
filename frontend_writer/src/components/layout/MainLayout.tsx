@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Sidebar } from "./Sidebar";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/authStore";
+import FloatingChat from "@/components/chat/FloatingChat";
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -53,6 +54,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       >
         {children}
       </main>
+      <FloatingChat />
     </div>
   );
 }

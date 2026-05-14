@@ -1,9 +1,34 @@
-# AI News Aggregator - Docker Compose Configuration
-# Usage: 
-#   Development: docker-compose up -d
-#   Production: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# AI News Aggregator - Docker Compose Configuration with Observability Stack
+# Usage: docker-compose up -d
 
 services:
+  # Frontend (Main)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ai-news-frontend
+    ports:
+      - "${FRONTEND_PORT:-3001}:3000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - NEXT_PUBLIC_API_URL=${API_URL:-http://backend:8000}
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - ai-news-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    volumes:
+      - ./frontend/entrypoint.sh:/entrypoint.sh
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+
   # Frontend Writer (Next.js)
   frontend-writer:
     build:
@@ -27,30 +52,9 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-
-  # Frontend (Next.js)
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: ai-news-frontend
-    ports:
-      - "${FRONTEND_PORT:-3001}:3000"
-    environment:
-      - NODE_ENV=${NODE_ENV:-production}
-      - NEXT_PUBLIC_API_URL=${API_URL:-http://backend:8000}
-    depends_on:
-      backend:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - ai-news-network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+    volumes:
+      - ./frontend_writer/entrypoint.sh:/entrypoint.sh
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
 
   # Backend (FastAPI)
   backend:
@@ -63,22 +67,14 @@ services:
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-ai_news}:${POSTGRES_PASSWORD:-ai_news_password}@db:5432/${POSTGRES_DB:-ai_news}
       - DATABASE_URL_ASYNC=postgresql+asyncpg://${POSTGRES_USER:-ai_news}:${POSTGRES_PASSWORD:-ai_news_password}@db:5432/${POSTGRES_DB:-ai_news}
-      - REDIS_URL=redis://redis:6379/0
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-strong-random-key}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3001,http://frontend:3001}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3001,http://frontend:3001,http://localhost:3002,http://frontend-writer:3001}
       - GITHUB_TOKEN=${GITHUB_TOKEN}
-      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
-      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
-      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
-      - R2_BUCKET_NAME=${R2_BUCKET_NAME}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - ./logs:/app/logs
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
+    depends_on: []
     restart: unless-stopped
     networks:
       - ai-news-network
@@ -89,98 +85,73 @@ services:
       retries: 3
       start_period: 40s
 
-  # Celery Worker
-  celery_worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: ai-news-celery-worker
-    command: celery -A app.celery_app worker --loglevel=${CELERY_LOG_LEVEL:-info} --concurrency=${CELERY_CONCURRENCY:-2}
-    environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-ai_news}:${POSTGRES_PASSWORD:-ai_news_password}@db:5432/${POSTGRES_DB:-ai_news}
-      - DATABASE_URL_ASYNC=postgresql+asyncpg://${POSTGRES_USER:-ai_news}:${POSTGRES_PASSWORD:-ai_news_password}@db:5432/${POSTGRES_DB:-ai_news}
-      - REDIS_URL=redis://redis:6379/0
-      - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-strong-random-key}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-    volumes:
-      - ./logs:/app/logs
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      backend:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - ai-news-network
+  # ============================================================
+  # Observability Stack
+  # ============================================================
 
-  # Celery Beat (Scheduler)
-  celery_beat:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: ai-news-celery-beat
-    command: celery -A app.celery_app beat --loglevel=${CELERY_LOG_LEVEL:-info}
-    environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-ai_news}:${POSTGRES_PASSWORD:-ai_news_password}@db:5432/${POSTGRES_DB:-ai_news}
-      - DATABASE_URL_ASYNC=postgresql+asyncpg://${POSTGRES_USER:-ai_news}:${POSTGRES_PASSWORD:-ai_news_password}@db:5432/${POSTGRES_DB:-ai_news}
-      - REDIS_URL=redis://redis:6379/0
-    volumes:
-      - ./logs:/app/logs
-    depends_on:
-      redis:
-        condition: service_started
-    restart: unless-stopped
-    networks:
-      - ai-news-network
-
-  # PostgreSQL Database
-  db:
-    image: postgres:16-alpine
-    container_name: ai-news-db
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER:-ai_news}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ai_news_password}
-      - POSTGRES_DB=${POSTGRES_DB:-ai_news}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
+  # Loki - Log aggregation system
+  loki:
+    image: grafana/loki:2.9.4
+    container_name: ai-news-loki
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - ./backend/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
     restart: unless-stopped
     networks:
       - ai-news-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ai_news} -d ${POSTGRES_DB:-ai_news}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # Redis Cache & Message Queue
-  redis:
-    image: redis:7-alpine
-    container_name: ai-news-redis
-    command: redis-server --appendonly yes
+  # Promtail - Log collector
+  promtail:
+    image: grafana/promtail:2.9.4
+    container_name: ai-news-promtail
     volumes:
-      - redisdata:/data
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - ./backend/promtail-config.yml:/etc/promtail/local-config.yaml:ro
+      - ./logs:/app/logs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/local-config.yaml
     restart: unless-stopped
     networks:
       - ai-news-network
+    depends_on:
+      - loki
+
+  # Grafana - Visualization
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: ai-news-grafana
+    ports:
+      - "${GRAFANA_PORT:-3200}:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_DISABLE_LOGIN_FORM=false
+    volumes:
+      - ./backend/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    restart: unless-stopped
+    networks:
+      - ai-news-network
+    depends_on:
+      - loki
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 networks:
   ai-news-network:
     driver: bridge
 
 volumes:
-  pgdata:
-    driver: local
-  redisdata:
-    driver: local
+  loki-data:
+  grafana-data:

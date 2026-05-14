@@ -9,6 +9,7 @@ import {
   getTemplates,
   generateContent,
   getWriterStats,
+  ApiError,
   type DraftListResponse,
   type Draft,
   type TemplateListResponse,
@@ -18,21 +19,21 @@ import {
 } from "@/lib/api";
 
 export function useWriterStats() {
-  return useQuery<WriterStats>({
+  return useQuery<WriterStats, ApiError>({
     queryKey: ["writer-stats"],
     queryFn: getWriterStats,
   });
 }
 
 export function useDrafts(params?: { status?: string; page?: number; page_size?: number }) {
-  return useQuery<DraftListResponse>({
+  return useQuery<DraftListResponse, ApiError>({
     queryKey: ["drafts", params],
     queryFn: () => getDrafts(params),
   });
 }
 
 export function useDraft(draftId: string) {
-  return useQuery<Draft>({
+  return useQuery<Draft, ApiError>({
     queryKey: ["draft", draftId],
     queryFn: () => getDraft(draftId),
     enabled: !!draftId,
@@ -41,7 +42,7 @@ export function useDraft(draftId: string) {
 
 export function useDeleteDraft() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useMutation<void, ApiError, string>({
     mutationFn: deleteDraft,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["drafts"] });
@@ -52,7 +53,7 @@ export function useDeleteDraft() {
 
 export function useBatchDeleteDrafts() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useMutation<{ deleted_count: number }, ApiError, string[]>({
     mutationFn: batchDeleteDrafts,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["drafts"] });
@@ -62,7 +63,7 @@ export function useBatchDeleteDrafts() {
 }
 
 export function useTemplates() {
-  return useQuery<TemplateListResponse>({
+  return useQuery<TemplateListResponse, ApiError>({
     queryKey: ["templates"],
     queryFn: getTemplates,
   });
@@ -70,7 +71,7 @@ export function useTemplates() {
 
 export function useGenerateContent() {
   const queryClient = useQueryClient();
-  return useMutation<GenerateResponse, Error, GenerateRequest>({
+  return useMutation<GenerateResponse, ApiError, GenerateRequest>({
     mutationFn: generateContent,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["drafts"] });

@@ -148,7 +148,7 @@ export const useAuthStore = create<AuthState>()(
             const cookieToken = ssoEntry.split("=")[1];
             if (cookieToken) {
               apiClient.defaults.headers.common["Authorization"] = `Bearer ${cookieToken}`;
-              state?.set({ token: cookieToken, isAuthenticated: true });
+              useAuthStore.setState({ token: cookieToken, isAuthenticated: true });
               state?.fetchCurrentUser();
             }
           }

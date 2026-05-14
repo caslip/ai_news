@@ -20,18 +20,27 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   AlertCircle,
   Trash2,
   Download,
   Eye,
   RefreshCw,
   FileText,
+  X,
+  ExternalLink,
 } from "lucide-react";
-import { useDrafts, useDeleteDraft, useBatchDeleteDrafts } from "@/hooks/useWriter";
+import { useDrafts, useDeleteDraft, useBatchDeleteDrafts, useDraft } from "@/hooks/useWriter";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { Draft } from "@/lib/api";
 
 const STATUS_FILTERS = [
   { value: "all", label: "全部" },
@@ -50,6 +59,7 @@ export default function DraftsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
+  const [viewDraft, setViewDraft] = useState<Draft | null>(null);
 
   const params = {
     status: statusFilter === "all" ? undefined : statusFilter,
@@ -102,6 +112,10 @@ export default function DraftsPage() {
     }
   };
 
+  const handleView = (draft: Draft) => {
+    setViewDraft(draft);
+  };
+
   const handleExport = (id: string, title: string) => {
     const draft = drafts.find((d) => d.id === id);
     if (!draft || !draft.content) {
@@ -118,6 +132,11 @@ export default function DraftsPage() {
     a.click();
     URL.revokeObjectURL(url);
     toast.success("导出成功");
+  };
+
+  const handleExportViewDraft = () => {
+    if (!viewDraft) return;
+    handleExport(viewDraft.id, viewDraft.title);
   };
 
   return (
@@ -255,7 +274,8 @@ export default function DraftsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
-                                onClick={() => handleExport(draft.id, draft.title)}
+                                onClick={() => handleView(draft)}
+                                title="查看内容"
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
@@ -263,6 +283,7 @@ export default function DraftsPage() {
                                 variant="ghost"
                                 size="icon-sm"
                                 onClick={() => handleExport(draft.id, draft.title)}
+                                title="导出下载"
                               >
                                 <Download className="h-4 w-4" />
                               </Button>
@@ -272,6 +293,7 @@ export default function DraftsPage() {
                             variant="ghost"
                             size="icon-sm"
                             onClick={() => handleDelete(draft.id)}
+                            title="删除草稿"
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
@@ -312,6 +334,68 @@ export default function DraftsPage() {
           </div>
         </div>
       )}
+
+      {/* View Draft Dialog */}
+      <Dialog open={!!viewDraft} onOpenChange={(open) => !open && setViewDraft(null)}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <div className="flex items-center justify-between pr-8">
+              <DialogTitle className="text-xl">
+                {viewDraft?.title || "无标题"}
+              </DialogTitle>
+            </div>
+            {viewDraft && (
+              <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                <Badge variant="outline">{viewDraft.word_count} 字</Badge>
+                <span>{viewDraft.style}</span>
+                <span>{viewDraft.tone}</span>
+                {viewDraft.source_url && (
+                  <a
+                    href={viewDraft.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-primary hover:underline"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    来源链接
+                  </a>
+                )}
+              </div>
+            )}
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto">
+            {viewDraft?.status === "failed" ? (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  {viewDraft.error_message || "内容生成失败"}
+                </AlertDescription>
+              </Alert>
+            ) : viewDraft?.status === "generating" ? (
+              <div className="flex items-center justify-center py-12">
+                <p className="text-muted-foreground">内容生成中...</p>
+              </div>
+            ) : (
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans">
+                  {viewDraft?.content || "暂无内容"}
+                </pre>
+              </div>
+            )}
+          </div>
+          <div className="flex-shrink-0 flex justify-end gap-2 pt-4 border-t">
+            <Button variant="outline" onClick={() => setViewDraft(null)}>
+              关闭
+            </Button>
+            {viewDraft?.status === "completed" && viewDraft?.content && (
+              <Button onClick={handleExportViewDraft}>
+                <Download className="h-4 w-4 mr-2" />
+                导出
+              </Button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

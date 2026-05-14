@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { GitBranch, Loader2, Mail, ArrowLeft } from "lucide-react";
 import apiClient from "@/lib/api";
-import { useAuthStore } from "@/stores/authStore";
+import { useAuthStore, type User } from "@/stores/authStore";
 
 const NEWS_LOGIN_URL = process.env.NEXT_PUBLIC_NEWS_URL || "http://localhost:3001";
 const WRITER_URL = process.env.NEXT_PUBLIC_WRITER_URL || "http://localhost:3002";
@@ -32,7 +32,7 @@ function syncToStore(token: string, userData: Record<string, unknown>) {
   apiClient.defaults.headers.common["Authorization"] = `Bearer ${token}`;
   useAuthStore.setState({
     token,
-    user: userData as Parameters<typeof useAuthStore.setState>[0]["user"],
+    user: userData as unknown as User,
     isAuthenticated: true,
     isLoading: false,
     error: null,

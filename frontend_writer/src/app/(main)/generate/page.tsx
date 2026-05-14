@@ -97,11 +97,17 @@ function GenerateContent() {
       });
 
       if (result.status === "completed") {
-        setOutput(result.content || "");
-        setOutputTitle(result.title || "");
-        toast.success("文章生成完成");
+        if (result.content) {
+          setOutput(result.content);
+          setOutputTitle(result.title || "");
+          toast.success("文章生成完成");
+        } else {
+          toast.warning("生成完成，但内容为空");
+        }
       } else if (result.status === "failed") {
         toast.error(result.error_message || "生成失败");
+      } else if (result.status === "generating") {
+        toast.info("内容生成中，稍后将出现在草稿箱");
       }
     } catch {
       toast.error("生成失败，请重试");
@@ -312,6 +318,15 @@ function GenerateContent() {
                   {output}
                 </div>
               </div>
+            </div>
+          ) : generateMutation.isSuccess && !generateMutation.data?.content ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <AlertCircle className="h-12 w-12 text-muted-foreground/30 mb-4" />
+              <p className="text-muted-foreground">
+                {generateMutation.data?.status === "failed"
+                  ? generateMutation.data?.error_message || "生成失败"
+                  : "生成完成，但内容为空"}
+              </p>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-16 text-center">

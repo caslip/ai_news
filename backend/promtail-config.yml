@@ -1,0 +1,145 @@
+# Promtail Configuration for AI News Aggregator
+# Promtail 是 Grafana Loki 的日志收集代理，负责从各服务收集日志并发送到 Loki
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /etc/promtail/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    timeout: 10s
+    tenant_id: ""
+
+scrape_configs:
+  # FastAPI Backend 日志
+  - job_name: ai-news-backend
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: ai-news-backend
+          service: ai-news-backend
+          service_type: api
+          __path__: /app/logs/app.log
+    pipeline_stages:
+      - json:
+          expressions:
+            timestamp: timestamp
+            level: level
+            message: message
+            module: module
+            function: function
+            line: line
+            service: service
+            service_type: service_type
+            request_id: request_id
+      - labels:
+          level:
+          service:
+          service_type:
+          module:
+
+  # Celery Worker 日志
+  - job_name: ai-news-celery-worker
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: ai-news-celery-worker
+          service: ai-news-celery
+          service_type: celery
+          __path__: /app/logs/celery.log
+    pipeline_stages:
+      - json:
+          expressions:
+            timestamp: timestamp
+            level: level
+            message: message
+            module: module
+            function: function
+            line: line
+            service: service
+            service_type: service_type
+            task_id: task_id
+            task_name: task_name
+      - labels:
+          level:
+          service:
+          service_type:
+          task_name:
+
+  # Nginx 访问日志 (如果配置了 nginx 日志)
+  - job_name: nginx-access
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: nginx-access
+          service: nginx
+          __path__: /var/log/nginx/access.log
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<ip>[\d\.]+) - (?P<user>[^\s]+) \[(?P<timestamp>[^\]]+)\] "(?P<method>\S+) (?P<path>\S+) (?P<protocol>[^"]+)" (?P<status>\d+) (?P<size>\d+)'
+      - labels:
+          ip:
+          method:
+          path:
+          status:
+
+  # 审计日志
+  - job_name: ai-news-audit
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: ai-news-audit
+          service: ai-news-backend
+          service_type: audit
+          __path__: /app/logs/audit.log
+    pipeline_stages:
+      - json:
+          expressions:
+            timestamp: timestamp
+            level: level
+            message: message
+            module: module
+            function: function
+            line: line
+            service: service
+            service_type: service_type
+            event_type: event_type
+            event_id: event_id
+            user_id: user_id
+            username: username
+            role: role
+            session_id: session_id
+            ip: ip
+            user_agent: user_agent
+            action: action
+            method: method
+            path: path
+            resource_type: resource_type
+            resource_id: resource_id
+            before: before
+            after: after
+            status: status
+            http_status: http_status
+            error_code: error_code
+            error_message: error_message
+            duration_ms: duration_ms
+            trace_id: trace_id
+            tenant_id: tenant_id
+            request_id: request_id
+      - labels:
+          level:
+          service:
+          service_type:
+          event_type:
+          action:
+          resource_type:
+          status:
+          user_id:
+          username:

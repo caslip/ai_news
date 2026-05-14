@@ -4,6 +4,12 @@ from app.config import settings
 from app.news.router import router as news_router
 from app.writer.router import router as writer_router
 from app import papers
+from app.logging_config import setup_logging
+from app.middleware import RequestLoggingMiddleware
+from app.logging.router import router as logging_router
+
+# 初始化日志配置
+setup_logging(service_name="ai-news-backend", service_type="api")
 
 app = FastAPI(
     title="AI News API",
@@ -24,6 +30,10 @@ app.add_middleware(
 app.include_router(news_router, prefix="/api")
 app.include_router(writer_router, prefix="/api/writer")
 app.include_router(papers.router, prefix="/api/papers", tags=["论文"])
+app.include_router(logging_router, prefix="/api")
+
+# 添加请求日志中间件
+app.add_middleware(RequestLoggingMiddleware)
 
 
 @app.on_event("startup")

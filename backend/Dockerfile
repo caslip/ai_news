@@ -14,7 +14,11 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     build-essential \
     libpq-dev \
     curl \
+    bash \
     && rm -rf /var/lib/apt/lists/*
+
+# Make entrypoint executable
+RUN chmod +x /app/entrypoint.sh || true
 
 # Install Python dependencies
 COPY requirements.txt .
@@ -22,6 +26,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy project
 COPY . .
+
+# Make entrypoint executable
+RUN chmod +x entrypoint.sh
 
 # Expose port
 EXPOSE 8000

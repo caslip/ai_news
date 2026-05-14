@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import apiClient from "@/lib/api";
 
-interface User {
+export interface User {
   id: string;
   email: string;
   nickname: string;
@@ -149,7 +149,7 @@ export const useAuthStore = create<AuthState>()(
             if (pending.token && pending.user) {
               localStorage.removeItem("pending_sso_v2");
               apiClient.defaults.headers.common["Authorization"] = `Bearer ${pending.token}`;
-              state?.set({
+              useAuthStore.setState({
                 token: pending.token,
                 user: pending.user,
                 isAuthenticated: true,
@@ -172,7 +172,7 @@ export const useAuthStore = create<AuthState>()(
             if (cookieToken) {
               apiClient.defaults.headers.common["Authorization"] = `Bearer ${cookieToken}`;
               apiClient.get("/api/auth/me").then((res) => {
-                state?.set({
+                useAuthStore.setState({
                   token: cookieToken,
                   user: res.data,
                   isAuthenticated: true,

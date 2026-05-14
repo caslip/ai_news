@@ -34,5 +34,6 @@ def init_db():
     """Initialize database tables"""
     # Import models to register them with Base
     from app.models import User, Source, Article, Bookmark, Tag, Strategy, MonitorConfig, Paper  # noqa
-    from app.models.writer import GeneratedContent  # noqa
+    from app.models.writer import GeneratedContent, WriterTemplate  # noqa
+    from app.models.draft import Draft  # noqa
     Base.metadata.create_all(bind=engine)
