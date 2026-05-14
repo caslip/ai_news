@@ -42,12 +42,17 @@ class Settings(BaseSettings):
     ]
 
     allowed_origins: list[str] | str = [
+        # Local development
         "http://localhost:3000",
         "http://localhost:3001",
         "http://localhost:3002",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
         "http://127.0.0.1:3002",
+        # Vercel production
+        "https://ai-news-nine-phi.vercel.app",
+        # Vercel preview deployments (wildcard pattern not supported, list common patterns)
+        "https://ai-news-git-main-caslips-projects.vercel.app",
     ]
 
     @field_validator("allowed_origins", mode="before")
