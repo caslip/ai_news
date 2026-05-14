@@ -73,7 +73,8 @@ export default function LoginPage() {
     const callbackUrl = returnTo
       ? `${window.location.origin}/auth/login?returnTo=${encodeURIComponent(returnTo)}`
       : `${window.location.origin}/auth/login`;
-    window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/auth/oauth/github?callback=${encodeURIComponent(callbackUrl)}`;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    window.location.href = `${apiUrl}/api/auth/oauth/github?callback=${encodeURIComponent(callbackUrl)}`;
   };
 
   return (
