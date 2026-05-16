@@ -30,6 +30,8 @@ function EditorContent() {
 
   const key = searchParams.get("key");
 
+  /** Whether we are still loading a session from localStorage */
+  const [isLoadingSession, setIsLoadingSession] = useState(!!key);
   /** Content set after markdown parsing — empty string = still loading */
   const [initialContent, setInitialContent] = useState("");
   /** Current editor content (user edits) */
@@ -48,11 +50,16 @@ function EditorContent() {
   // Load session — parse markdown async, update content only when ready
   useEffect(() => {
     const sessionKey = key || getLastEditorKey();
-    if (!sessionKey) return;
+    if (!sessionKey) {
+      setIsLoadingSession(false);
+      return;
+    }
 
+    setIsLoadingSession(true);
     const session = loadEditorSession(sessionKey);
     if (!session) {
       if (key) toast.error("无法加载编辑器内容");
+      setIsLoadingSession(false);
       return;
     }
 
@@ -60,6 +67,7 @@ function EditorContent() {
       setTitle(session.title || "");
       setInitialContent(html);
       setContent(html);
+      setIsLoadingSession(false);
     });
   }, [key]);
 
@@ -121,8 +129,8 @@ function EditorContent() {
     }
   };
 
-  // Show skeleton while markdown is being parsed
-  if (!initialContent && !content) {
+  // Show skeleton while session is being loaded
+  if (isLoadingSession) {
     return (
       <div className="h-screen flex flex-col bg-background">
         <div className="flex items-center gap-4 px-6 py-3 border-b bg-card shrink-0">
