@@ -146,7 +146,7 @@ export const useAuthStore = create<AuthState>()(
         isAuthenticated: state.isAuthenticated,
         hasHydrated: state.hasHydrated,
       }),
-      onRehydrateStorage: () => (_state, _error) => {
+      onRehydrateStorage: () => (state, _error) => {
         useAuthStore.setState({ hasHydrated: true });
         // 检查 pending_sso_v2（跨平台 SSO 跳转时 Zustand persist 还没写入）
         try {

@@ -348,6 +348,8 @@ class FrontendLogger {
     options: {
       resource_type?: string;
       resource_id?: string;
+      page_name?: string;
+      method?: string;
       before?: unknown;
       after?: unknown;
       status?: EventStatus;
