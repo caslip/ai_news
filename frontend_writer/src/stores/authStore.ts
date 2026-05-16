@@ -19,12 +19,15 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  /** Whether localStorage rehydration has completed */
+  hasHydrated: boolean;
 
   login: (email: string, password: string) => Promise<boolean>;
   register: (email: string, password: string, nickname: string) => Promise<boolean>;
   logout: () => Promise<void>;
   fetchCurrentUser: () => Promise<boolean>;
   clearError: () => void;
+  setHasHydrated: (v: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -35,6 +38,7 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: false,
       error: null,
+      hasHydrated: false,
 
       login: async (email: string, password: string) => {
         set({ isLoading: true, error: null });
@@ -132,6 +136,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       clearError: () => set({ error: null }),
+      setHasHydrated: (v) => set({ hasHydrated: v }),
     }),
     {
       name: "ai-writer-auth",
@@ -139,8 +144,10 @@ export const useAuthStore = create<AuthState>()(
         token: state.token,
         user: state.user,
         isAuthenticated: state.isAuthenticated,
+        hasHydrated: state.hasHydrated,
       }),
-      onRehydrateStorage: () => (state) => {
+      onRehydrateStorage: () => (_state, _error) => {
+        useAuthStore.setState({ hasHydrated: true });
         // 检查 pending_sso_v2（跨平台 SSO 跳转时 Zustand persist 还没写入）
         try {
           const pendingRaw = localStorage.getItem("pending_sso_v2");

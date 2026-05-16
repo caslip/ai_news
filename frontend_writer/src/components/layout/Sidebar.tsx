@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
+  FileEdit,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ import { PlatformSwitcher } from "@/components/layout/PlatformSwitcher";
 const navItems = [
   { href: "/", label: "首页", icon: Home },
   { href: "/generate", label: "文章生成", icon: PenLine },
+  { href: "/editor", label: "文本编辑器", icon: FileEdit },
   { href: "/drafts", label: "草稿箱", icon: FileText },
   { href: "/templates", label: "模板库", icon: LayoutTemplate },
   { href: "/settings", label: "设置", icon: Settings },
