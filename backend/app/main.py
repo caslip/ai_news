@@ -75,3 +75,6 @@ def root():
         "docs": "/docs",
         "health": "/api/health",
     }
+
+print("--------------------------------")
+print(settings.allowed_origins)

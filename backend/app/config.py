@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 from pydantic import field_validator, ConfigDict
 from pydantic_settings import BaseSettings
 import logging
@@ -48,41 +49,18 @@ class Settings(BaseSettings):
         "openai/gpt-4o",
     ]
 
-    allowed_origins: list[str] | str = [
-        # Local development
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:3002",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3001",
-        "http://127.0.0.1:3002",
-        # Vercel production
-        "https://ai-news-nine-phi.vercel.app",
-        "https://ai-writter-beta.vercel.app",
-        # Vercel preview deployments
-        "https://ai-news-git-main-caslips-projects.vercel.app",
-        # Backend API domain
-        "https://roshxopx.cn",
-    ]
+    allowed_origins: list[str] | str
 
     @field_validator("allowed_origins", mode="before")
     @classmethod
-    def parse_origins(cls, v):
+    def parse_origins(cls, v: Any):
         if isinstance(v, list):
             return v
         if isinstance(v, str):
             if not v.strip():
-            return [
-                "http://localhost:3000",
-                "http://localhost:3001",
-                "http://localhost:3002",
-                "http://127.0.0.1:3000",
-                "http://127.0.0.1:3001",
-                "http://127.0.0.1:3002",
-                "https://ai-news-nine-phi.vercel.app",
-                "https://ai-writter-beta.vercel.app",
-                "https://roshxopx.cn",
-            ]
+                return [
+                    "",
+                ]
             return [o.strip() for o in v.split(",") if o.strip()]
         return v
 
