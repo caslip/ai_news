@@ -4,6 +4,7 @@
 配置 JSON 格式的结构化日志，支持：
 - 文件日志 (写入 /app/logs/)
 - 控制台日志 (Docker stdout)
+- Loki 日志 (通过 HTTP 发送到 Loki 服务器)
 - Celery worker 专用日志 (包含 task_id, task_name)
 - 审计日志 (包含 before/after 状态快照)
 """
@@ -12,11 +13,15 @@ import logging
 import logging.handlers
 import sys
 import os
+import json
+import socket
+import threading
+import time
 from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
-from pythonjsonlogger import jsonlogger
+from pythonjsonlogger import json as jsonlogger
 
 # ============================================================
 # Async-Safe Context Variables for Request Tracing
@@ -100,8 +105,8 @@ def generate_trace_id() -> str:
     """生成新的 trace_id"""
     return str(uuid4())
 
-# 日志目录
-LOG_DIR = Path("/app/logs")
+# 日志目录（Docker: /app/logs, 本地: d:\.Job\ai_news\logs）
+LOG_DIR = Path("/app/logs") if Path("/app/logs").exists() else Path(__file__).parent.parent.parent / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # 日志文件路径
@@ -111,6 +116,29 @@ AUDIT_LOG_FILE = LOG_DIR / "audit.log"
 
 # 默认日志级别
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+
+# 日志范围开关：all=全部日志, writer=仅writer模块, news=仅news/爬虫模块
+LOG_SCOPE = os.getenv("LOG_SCOPE", "all").lower()
+
+# Console scope filter — 根据 LOG_SCOPE 过滤不需要的模块到终端
+class ScopeFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        if LOG_SCOPE == "all":
+            return True
+        name = record.name  # e.g. "app.services.scheduler", "app.writer.routers.chat"
+        if LOG_SCOPE == "writer":
+            # 隐藏爬虫、scheduler、celery tasks
+            hide_prefixes = (
+                "app.services.scheduler",
+                "app.services.celery_tasks",
+                "app.services.ai_tasks",
+                "apscheduler",
+            )
+            return not name.startswith(hide_prefixes)
+        if LOG_SCOPE == "news":
+            # 隐藏 writer 模块和 LLM service
+            return not name.startswith(("app.writer", "app.services.llm_service"))
+        return True
 
 
 class CustomJsonFormatter(jsonlogger.JsonFormatter):
@@ -214,6 +242,126 @@ class AuditJsonFormatter(CustomJsonFormatter):
         log_record["event_type"] = "audit"
 
 
+class LokiHttpHandler(logging.Handler):
+    """
+    Loki HTTP Handler - 将日志通过 HTTP 协议发送到 Loki 服务器
+
+    使用后台线程批量发送，避免阻塞主线程。
+    日志不可达时静默失败，不影响业务请求。
+    """
+
+    _instance_count = 0
+    _send_thread: threading.Thread | None = None
+    _send_lock = threading.Lock()
+    _queue: list[tuple[dict, float]] = []  # (streams_dict, timestamp)
+    _queue_capacity = 500
+    _flush_interval = 2.0  # seconds
+
+    def __init__(self, host: str, port: int, job_name: str = "ai-news-backend"):
+        super().__init__()
+        self.host = host
+        self.port = port
+        self.job_name = job_name
+        self.url = f"http://{host}:{port}/loki/api/v1/push"
+        self._id = LokiHttpHandler._instance_count
+        LokiHttpHandler._instance_count += 1
+        self._start_sender()
+
+    def _start_sender(self):
+        with LokiHttpHandler._send_lock:
+            if LokiHttpHandler._send_thread is None or not LokiHttpHandler._send_thread.is_alive():
+                LokiHttpHandler._queue = []
+                LokiHttpHandler._send_thread = threading.Thread(
+                    target=self._sender_loop, daemon=True, name="loki-sender"
+                )
+                LokiHttpHandler._send_thread.start()
+
+    def _sender_loop(self):
+        import urllib.request
+        import urllib.error
+        last_flush = time.monotonic()
+        while True:
+            time.sleep(0.5)
+            now = time.monotonic()
+            should_flush = (
+                len(LokiHttpHandler._queue) >= self._queue_capacity
+                or (now - last_flush) >= self._flush_interval
+            )
+            if should_flush and LokiHttpHandler._queue:
+                with LokiHttpHandler._send_lock:
+                    batch = LokiHttpHandler._queue[:]
+                    LokiHttpHandler._queue.clear()
+                if batch:
+                    self._send_batch(batch)
+
+    def _send_batch(self, batch: list[tuple[dict, float]]):
+        import urllib.request
+        import urllib.error
+        try:
+            streams = {"streams": []}
+            for item, _ts in batch:
+                streams["streams"].extend(item.get("streams", []))
+            if not streams["streams"]:
+                return
+            data = json.dumps(streams).encode("utf-8")
+            req = urllib.request.Request(
+                self.url, data=data,
+                headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=5) as response:
+                response.read()
+        except Exception:
+            pass  # Loki unreachable — silently drop logs
+
+    def emit(self, record: logging.LogRecord):
+        """非阻塞：将日志加入队列，立即返回"""
+        try:
+            log_entry = self.format(record)
+            if isinstance(log_entry, str):
+                log_data = json.loads(log_entry)
+            else:
+                log_data = log_entry
+
+            labels = {
+                "job": self.job_name,
+                "level": record.levelname,
+                "service": getattr(record, "service", self.job_name),
+            }
+
+            streams = {
+                "streams": [{
+                    "stream": labels,
+                    "values": [[str(int(record.created * 1e9)), json.dumps(log_data)]]
+                }]
+            }
+
+            with LokiHttpHandler._send_lock:
+                LokiHttpHandler._queue.append((streams, record.created))
+                if len(LokiHttpHandler._queue) > self._queue_capacity:
+                    LokiHttpHandler._queue.pop(0)
+        except Exception:
+            pass
+
+
+def setup_loki_handler(logger: logging.Logger, loki_host: str, loki_port: int, job_name: str = "ai-news-backend"):
+    """
+    为 logger 添加 Loki HTTP Handler
+
+    Args:
+        logger: 要添加 handler 的 logger
+        loki_host: Loki 服务器地址
+        loki_port: Loki 服务器端口
+        job_name: 标签名称，用于区分不同服务
+    """
+    loki_handler = LokiHttpHandler(loki_host, loki_port, job_name)
+    loki_handler.setLevel(logging.INFO)
+    loki_handler.setFormatter(CustomJsonFormatter(
+        "%(timestamp)s %(level)s %(name)s %(message)s",
+        service_name=job_name
+    ))
+    logger.addHandler(loki_handler)
+
+
 def setup_logging(service_name: str = "ai-news-backend", service_type: str = "api"):
     """
     初始化日志配置
@@ -248,14 +396,27 @@ def setup_logging(service_name: str = "ai-news-backend", service_type: str = "ap
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(json_formatter)
 
-    # 控制台 handler
+    # 控制台 handler - 简洁格式：仅显示 API 请求和响应
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(json_formatter)
+    console_handler.setFormatter(logging.Formatter(
+        "[%(levelname)s] %(message)s"
+    ))
+    console_handler.addFilter(ScopeFilter())
 
     # 添加 handlers
     root_logger.addHandler(file_handler)
     root_logger.addHandler(console_handler)
+
+    # Loki handler (可选，通过环境变量配置)
+    loki_host = os.getenv("LOKI_HOST")
+    loki_port = os.getenv("LOKI_PORT")
+    if loki_host and loki_port:
+        try:
+            setup_loki_handler(root_logger, loki_host, int(loki_port), service_name)
+            root_logger.info(f"Loki logging enabled: {loki_host}:{loki_port}")
+        except Exception as e:
+            root_logger.warning(f"Failed to setup Loki logging: {e}")
 
     # 配置 uvicorn 日志
     configure_uvicorn_logging(service_name, service_type)
@@ -297,13 +458,26 @@ def setup_celery_logging(service_name: str = "ai-news-celery"):
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(celery_formatter)
 
-    # 控制台 handler
+    # 控制台 handler - 简洁格式
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(celery_formatter)
+    console_handler.setFormatter(logging.Formatter(
+        "[%(levelname)s] %(message)s"
+    ))
+    console_handler.addFilter(ScopeFilter())
 
     root_logger.addHandler(file_handler)
     root_logger.addHandler(console_handler)
+
+    # Loki handler (可选，通过环境变量配置)
+    loki_host = os.getenv("LOKI_HOST")
+    loki_port = os.getenv("LOKI_PORT")
+    if loki_host and loki_port:
+        try:
+            setup_loki_handler(root_logger, loki_host, int(loki_port), service_name)
+            root_logger.info(f"Loki logging enabled: {loki_host}:{loki_port}")
+        except Exception as e:
+            root_logger.warning(f"Failed to setup Loki logging: {e}")
 
     # 配置第三方库日志
     configure_third_party_logging()
@@ -341,15 +515,24 @@ def configure_third_party_logging():
         "httpx": logging.WARNING,
         "httpcore": logging.WARNING,
         "urllib3": logging.WARNING,
-        "apscheduler": logging.INFO,
         "sqlalchemy.engine": logging.WARNING,
-        "celery": logging.INFO,
-        "celery.worker": logging.INFO,
-        "celery.tasks": logging.INFO,
     }
 
     for logger_name, level in third_party_loggers.items():
         logging.getLogger(logger_name).setLevel(level)
+
+    # 根据 LOG_SCOPE 设置 scope 相关日志级别
+    if LOG_SCOPE == "writer":
+        # 静默爬虫和 scheduler 模块
+        for _name in ("app.services.scheduler", "app.services.celery_tasks",
+                      "app.services.ai_tasks", "apscheduler", "celery",
+                      "celery.worker", "celery.tasks"):
+            logging.getLogger(_name).setLevel(logging.WARNING)
+    elif LOG_SCOPE == "news":
+        # 静默 writer 模块
+        logging.getLogger("app.writer").setLevel(logging.WARNING)
+        logging.getLogger("app.services.llm_service").setLevel(logging.WARNING)
+        logging.getLogger("app.services.sse").setLevel(logging.WARNING)
 
 
 def get_logger(name: str) -> logging.Logger:

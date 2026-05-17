@@ -9,6 +9,7 @@ These tests mock the actual LLM calls and focus on:
 - Streaming and non-streaming responses
 """
 
+import os
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 
@@ -22,7 +23,7 @@ class TestLLMServiceProviderConfig:
         """Test that default provider falls back to deepseek."""
         with patch("app.services.llm_service.settings") as mock_settings:
             mock_settings.effective_llm_provider = "deepseek"
-            mock_settings.deepseek_model = "deepseek-chat"
+            mock_settings.deepseek_model = "deepseek-v4-flash"
             mock_settings.deepseek_api_key = "test-key"
             mock_settings.deepseek_base_url = "https://api.deepseek.com"
             mock_settings.openrouter_api_key = ""
@@ -56,7 +57,7 @@ class TestLLMServiceProviderConfig:
             mock_settings.openai_api_key = ""
             mock_settings.effective_llm_provider = "deepseek"
 
-            llm = LLMService(model="deepseek/deepseek-chat-v3-5:free")
+            llm = LLMService(model="google/gemini-2.0-flash-thinking-exp:free")
             assert llm.provider == "openrouter"
 
     def test_invalid_provider_falls_back_to_deepseek(self):
@@ -340,7 +341,7 @@ class TestLLMServiceHelpers:
     def test_get_available_providers(self):
         """Test get_available_providers returns expected structure."""
         with patch("app.services.llm_service.settings") as mock_settings:
-            mock_settings.available_models = ["deepseek/deepseek-chat-v3-5:free"]
+            mock_settings.available_models = ["google/gemini-2.0-flash-thinking-exp:free"]
 
             providers = LLMService.get_available_providers()
 
@@ -416,3 +417,46 @@ class TestLLMServiceOpenaiProvider:
             llm = LLMService(provider="openai")
             assert llm.provider == "openai"
             assert llm.model == "gpt-4o"
+
+
+class TestLLMServiceIntegration:
+    """
+    Integration tests that make real API calls using keys from environment variables.
+    Run with: pytest backend/tests/test_llm_service.py::TestLLMServiceIntegration -v
+    Skip with: pytest ... -k "not integration"
+    """
+
+    @pytest.mark.asyncio
+    async def test_integration_deepseek_real_call(self):
+        """Test a real DeepSeek API call with the environment API key."""
+        api_key = os.environ.get("DEEPSEEK_API_KEY")
+        if not api_key:
+            pytest.skip("DEEPSEEK_API_KEY not set in environment")
+
+        llm = LLMService(provider="deepseek")
+        assert llm.provider == "deepseek"
+
+        response = await llm.ainvoke([{"role": "user", "content": "Say 'OK' in exactly one word."}])
+
+        assert isinstance(response, str)
+        assert len(response.strip()) > 0
+        print(f"\nDeepSeek response: {response}")
+
+    @pytest.mark.asyncio
+    async def test_integration_deepseek_streaming(self):
+        """Test real streaming response from DeepSeek."""
+        api_key = os.environ.get("DEEPSEEK_API_KEY")
+        if not api_key:
+            pytest.skip("DEEPSEEK_API_KEY not set in environment")
+
+        llm = LLMService(provider="deepseek")
+
+        chunks = []
+        async for chunk in llm.astream([{"role": "user", "content": "Count from 1 to 3, comma-separated."}]):
+            chunks.append(chunk)
+
+        full_response = "".join(chunks)
+        assert len(chunks) > 0, "Expected at least one chunk"
+        assert len(full_response.strip()) > 0, "Response should not be empty"
+        print(f"\nDeepSeek streaming chunks: {chunks}")
+        print(f"Full response: {full_response}")

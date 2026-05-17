@@ -9,7 +9,7 @@ import time
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 from sqlalchemy.orm import Session
@@ -64,6 +64,12 @@ class SessionInfo(BaseModel):
 class SessionListResponse(BaseModel):
     """Response for listing sessions."""
     sessions: list[SessionInfo]
+
+
+@router.options("/sessions")
+async def sessions_options():
+    """Handle CORS preflight for sessions endpoints."""
+    return Response(status_code=200)
 
 
 @router.get("/sessions", response_model=SessionListResponse)
@@ -154,6 +160,12 @@ async def chat(
             message="",
             error=str(e),
         )
+
+
+@router.options("/stream")
+async def chat_stream_options():
+    """Handle CORS preflight for stream endpoint."""
+    return Response(status_code=200)
 
 
 @router.post("/stream")

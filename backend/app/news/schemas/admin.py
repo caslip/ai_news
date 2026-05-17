@@ -2,7 +2,7 @@
 后台管理 Schema
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -37,8 +37,7 @@ class UserManagementResponse(BaseModel):
     articles_count: int = 0
     bookmarks_count: int = 0
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserRoleUpdate(BaseModel):

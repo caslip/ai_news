@@ -1,8 +1,15 @@
-from pydantic import field_validator
+from pathlib import Path
+from pydantic import field_validator, ConfigDict
 from pydantic_settings import BaseSettings
+import logging
 from functools import lru_cache
 import os
-import logging
+
+from dotenv import load_dotenv
+
+# Find .env in project root (two levels up from app/config.py)
+_env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+load_dotenv(_env_path)
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +30,7 @@ class Settings(BaseSettings):
     # DeepSeek configuration
     deepseek_api_key: str = os.getenv("DEEPSEEK_API_KEY", "")
     deepseek_base_url: str = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-    deepseek_model: str = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+    deepseek_model: str = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
 
     # OpenRouter configuration (existing)
     openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
@@ -34,9 +41,9 @@ class Settings(BaseSettings):
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o")
 
     # Model configuration
-    default_model: str = os.getenv("DEFAULT_MODEL", "deepseek/deepseek-chat-v3-5:free")
+    default_model: str = os.getenv("DEFAULT_MODEL", "deepseek-v4-flash")
     available_models: list[str] = [
-        "deepseek/deepseek-chat-v3-5:free",
+        "deepseek-v4-flash",
         "anthropic/claude-3.5-sonnet",
         "openai/gpt-4o",
     ]
@@ -51,7 +58,8 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3002",
         # Vercel production
         "https://ai-news-nine-phi.vercel.app",
-        # Vercel preview deployments (wildcard pattern not supported, list common patterns)
+        "https://ai-writter-beta.vercel.app",
+        # Vercel preview deployments
         "https://ai-news-git-main-caslips-projects.vercel.app",
         # Backend API domain
         "https://roshxopx.cn",
@@ -64,14 +72,17 @@ class Settings(BaseSettings):
             return v
         if isinstance(v, str):
             if not v.strip():
-                return [
-                    "http://localhost:3000",
-                    "http://localhost:3001",
-                    "http://localhost:3002",
-                    "http://127.0.0.1:3000",
-                    "http://127.0.0.1:3001",
-                    "http://127.0.0.1:3002",
-                ]
+            return [
+                "http://localhost:3000",
+                "http://localhost:3001",
+                "http://localhost:3002",
+                "http://127.0.0.1:3000",
+                "http://127.0.0.1:3001",
+                "http://127.0.0.1:3002",
+                "https://ai-news-nine-phi.vercel.app",
+                "https://ai-writter-beta.vercel.app",
+                "https://roshxopx.cn",
+            ]
             return [o.strip() for o in v.split(",") if o.strip()]
         return v
 
@@ -94,9 +105,7 @@ class Settings(BaseSettings):
         else:
             return self.openrouter_model
 
-    class Config:
-        env_file = ".env"
-        extra = "allow"
+    model_config = ConfigDict(env_file=".env", extra="allow")
 
 
 @lru_cache()

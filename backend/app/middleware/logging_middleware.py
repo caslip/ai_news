@@ -9,10 +9,8 @@ import uuid
 import time
 import logging
 import os
-from typing import Callable, Optional
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response
+from typing import Callable
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.logging_config import (
     RequestContext,
@@ -24,9 +22,9 @@ from app.logging_config import (
 logger = logging.getLogger(__name__)
 
 
-class RequestLoggingMiddleware(BaseHTTPMiddleware):
+class RequestLoggingMiddleware:
     """
-    请求日志中间件
+    请求日志中间件 (原生 ASGI 形式)
 
     功能：
     - 为每个请求生成唯一的 request_id 和 trace_id
@@ -41,23 +39,58 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     TRACE_ID_HEADER = "X-Trace-ID"
     TENANT_ID_HEADER = "X-Tenant-ID"
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # 生成或使用现有的 request_id
-        request_id = request.headers.get(self.REQUEST_ID_HEADER) or str(uuid.uuid4())
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
 
-        # 生成或使用现有的 trace_id
-        trace_id = request.headers.get(self.TRACE_ID_HEADER) or generate_trace_id()
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
-        # 获取客户端 IP (支持代理)
-        client_ip = self._get_client_ip(request)
+        headers_list = scope.get("headers", [])
 
-        # 获取用户代理
-        user_agent = request.headers.get("user-agent", "")
+        def decode_value(val):
+            """Decode header value, handling both bytes and strings (and lists)."""
+            if isinstance(val, bytes):
+                return val.decode("utf-8", errors="replace")
+            if isinstance(val, list):
+                return [decode_value(v) for v in val]
+            return str(val)
 
-        # 提取用户信息和租户 ID (从 JWT)
-        user_id, username, role, tenant_id, session_id = self._extract_user_info(request)
+        headers_dict: dict[str, str | list[str]] = {}
+        if isinstance(headers_list, list):
+            for item in headers_list:
+                if isinstance(item, tuple) and len(item) == 2:
+                    k, v = item
+                    k_str = decode_value(k)
+                    v_val = decode_value(v)
+                    lower_k = k_str.lower()
+                    existing = headers_dict.get(lower_k)
+                    if existing is not None:
+                        if isinstance(existing, list):
+                            existing.append(v_val)
+                        else:
+                            headers_dict[lower_k] = [existing, v_val]
+                    else:
+                        headers_dict[lower_k] = v_val
 
-        # 设置请求上下文
+        def get_header(name: str, default: str = "") -> str:
+            val = headers_dict.get(name.lower(), default)
+            if isinstance(val, list):
+                return ", ".join(str(v) for v in val)
+            return val
+
+        request_id = get_header(self.REQUEST_ID_HEADER) or str(uuid.uuid4())
+        trace_id = get_header(self.TRACE_ID_HEADER) or generate_trace_id()
+
+        method = scope.get("method", "UNKNOWN")
+        path = scope.get("path", "/")
+        client_ip = self._get_client_ip_from_headers(headers_dict)
+        user_agent = get_header("user-agent")
+        user_id, username, role, tenant_id, session_id = self._extract_user_info_from_headers(
+            headers_dict
+        )
+
         set_request_context(
             request_id=request_id,
             trace_id=trace_id,
@@ -70,116 +103,58 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             user_agent=user_agent,
         )
 
-        # 记录请求开始
         start_time = time.time()
+        logger.info(f"{method} {path}")
 
-        logger.info(
-            "Request started",
-            extra={
-                "request_id": request_id,
-                "trace_id": trace_id,
-                "method": request.method,
-                "path": request.url.path,
-                "query_params": str(request.query_params),
-                "client_ip": client_ip,
-                "user_agent": user_agent,
-                "user_id": user_id,
-                "username": username,
-                "tenant_id": tenant_id,
-            }
-        )
+        status_code = 500
+
+        async def send_wrapper(message: dict) -> None:
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message["status"]
+                headers = list(message.get("headers", []))
+                headers.append(
+                    (self.REQUEST_ID_HEADER.encode(), request_id.encode())
+                )
+                headers.append((self.TRACE_ID_HEADER.encode(), trace_id.encode()))
+                await send({**message, "headers": headers})
+            else:
+                await send(message)
 
         try:
-            # 处理请求
-            response = await call_next(request)
-
-            # 计算响应时间
-            duration_ms = (time.time() - start_time) * 1000
-
-            # 记录请求结束
-            logger.info(
-                "Request completed",
-                extra={
-                    "request_id": request_id,
-                    "trace_id": trace_id,
-                    "method": request.method,
-                    "path": request.url.path,
-                    "status_code": response.status_code,
-                    "duration_ms": round(duration_ms, 2),
-                    "user_id": user_id,
-                    "username": username,
-                }
-            )
-
-            # 将 request_id 和 trace_id 添加到响应头
-            response.headers[self.REQUEST_ID_HEADER] = request_id
-            response.headers[self.TRACE_ID_HEADER] = trace_id
-
-            return response
-
+            await self.app(scope, receive, send_wrapper)
         except Exception as e:
-            # 计算响应时间
             duration_ms = (time.time() - start_time) * 1000
-
-            # 记录异常
             logger.error(
-                "Request failed",
-                extra={
-                    "request_id": request_id,
-                    "trace_id": trace_id,
-                    "method": request.method,
-                    "path": request.url.path,
-                    "duration_ms": round(duration_ms, 2),
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                    "user_id": user_id,
-                    "username": username,
-                },
-                exc_info=True
+                f"{method} {path} ERROR: {type(e).__name__}: {e} ({duration_ms:.0f}ms)"
             )
-
             raise
-
         finally:
-            # 清除请求上下文
+            duration_ms = (time.time() - start_time) * 1000
+            logger.info(f"{method} {path} {status_code} {duration_ms:.0f}ms")
             clear_request_context()
 
-    def _get_client_ip(self, request: Request) -> str:
-        """获取客户端真实 IP (支持代理)"""
-        # 检查 X-Forwarded-For 头
-        forwarded_for = request.headers.get("x-forwarded-for")
+    def _get_client_ip_from_headers(self, headers: dict) -> str:
+        forwarded_for = headers.get("x-forwarded-for", "")
         if forwarded_for:
-            # 取第一个 IP
             return forwarded_for.split(",")[0].strip()
-
-        # 检查 X-Real-IP 头
-        real_ip = request.headers.get("x-real-ip")
+        real_ip = headers.get("x-real-ip", "")
         if real_ip:
             return real_ip
+        return "unknown"
 
-        # 回退到直接连接的 IP
-        return request.client.host if request.client else "unknown"
-
-    def _extract_user_info(self, request: Request) -> tuple:
-        """
-        从请求中提取用户信息
-
-        Returns:
-            tuple: (user_id, username, role, tenant_id, session_id)
-        """
-        auth_header = request.headers.get("authorization", "")
+    def _extract_user_info_from_headers(self, headers: dict) -> tuple:
+        auth_header = headers.get("authorization", "")
 
         if not auth_header.startswith("Bearer "):
             return None, None, None, None, None
 
-        token = auth_header[7:]  # 去掉 "Bearer " 前缀
+        token = auth_header[7:]
 
         try:
-            # 尝试从 JWT 中提取信息
             import jwt
             from app.config import settings
 
-            # 解码 JWT (不验证签名，仅提取信息)
             payload = jwt.decode(
                 token,
                 options={"verify_signature": False},
@@ -194,7 +169,6 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 payload.get("session_id") or payload.get("sid"),
             )
         except Exception:
-            # JWT 解码失败，返回默认值
             return None, None, None, None, None
 
 

@@ -25,7 +25,7 @@ class LLMService:
         response = await llm.ainvoke([{"role": "user", "content": "Hello"}])
         
         # With specific model
-        llm = LLMService(model="deepseek/deepseek-chat-v3-5:free")
+        llm = LLMService(model="google/gemini-2.0-flash-thinking-exp:free")
         response = await llm.ainvoke([{"role": "user", "content": "Hello"}])
         
         # With specific provider
@@ -39,10 +39,12 @@ class LLMService:
     
     # Model to provider mapping
     MODEL_PROVIDER = {
-        "deepseek/deepseek-chat-v3-5:free": "openrouter",
         "anthropic/claude-3.5-sonnet": "openrouter",
         "openai/gpt-4o": "openrouter",
+        "google/gemini-2.0-flash-thinking-exp:free": "openrouter",
         "deepseek-chat": "deepseek",
+        "deepseek-v4-flash": "deepseek",
+        "deepseek-v4-pro": "deepseek",
         "deepseek-coder": "deepseek",
     }
     
@@ -83,7 +85,7 @@ class LLMService:
         else:
             self.model = settings.openrouter_model
         
-        logger.info(f"LLMService initialized with model={self.model}, provider={self.provider}")
+        logger.info(f"LLM: {self.model} via {self.provider}")
     
     def _get_llm(self, streaming: bool = False, **kwargs):
         """Get the appropriate LLM instance based on provider."""
@@ -136,11 +138,10 @@ class LLMService:
         llm = self._get_llm(streaming=False)
         langchain_messages = self._to_langchain_messages(messages)
         
-        logger.debug(f"Invoking LLM with {len(messages)} messages")
+        logger.debug(f"Invoking LLM, messages={len(messages)}")
         response = await llm.ainvoke(langchain_messages)
         
         content = response.content if hasattr(response, 'content') else str(response)
-        logger.debug(f"LLM response received, length={len(content)}")
         return content
     
     async def astream(self, messages: list[dict], **kwargs) -> AsyncIterator[str]:

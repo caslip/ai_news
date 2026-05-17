@@ -88,7 +88,7 @@ This guide will help you get started with LangChain.
             MockLLM.return_value = mock_llm_instance
 
             with patch("app.writer.routers.generate.settings") as mock_settings:
-                mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
 
                 response = client.post(
                     "/api/writer/generate",
@@ -120,7 +120,7 @@ This guide will help you get started with LangChain.
             MockLLM.return_value = mock_llm_instance
 
             with patch("app.writer.routers.generate.settings") as mock_settings:
-                mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
 
                 response = client.post(
                     "/api/writer/generate",
@@ -157,7 +157,7 @@ This guide will help you get started with LangChain.
             MockLLM.return_value = mock_llm_instance
 
             with patch("app.writer.routers.generate.settings") as mock_settings:
-                mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
 
                 response = client.post(
                     "/api/writer/generate",
@@ -188,7 +188,7 @@ This guide will help you get started with LangChain.
                 MockLLM.return_value = mock_llm_instance
 
                 with patch("app.writer.routers.generate.settings") as mock_settings:
-                    mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                    mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
 
                     response = client.post(
                         "/api/writer/generate",
@@ -217,7 +217,7 @@ This guide will help you get started with LangChain.
             )
 
             with patch("app.writer.routers.generate.settings") as mock_settings:
-                mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
 
                 response = client.post(
                     "/api/writer/generate",
@@ -247,7 +247,7 @@ This guide will help you get started with LangChain.
             MockLLM.return_value = mock_llm_instance
 
             with patch("app.writer.routers.generate.settings") as mock_settings:
-                mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
 
                 response = client.post(
                     "/api/writer/generate",
@@ -278,7 +278,7 @@ This guide will help you get started with LangChain.
                 MockLLM.return_value = mock_llm_instance
 
                 with patch("app.writer.routers.generate.settings") as mock_settings:
-                    mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                    mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
 
                     response = client.post(
                         "/api/writer/generate",
@@ -308,7 +308,7 @@ This guide will help you get started with LangChain.
                 MockLLM.return_value = mock_llm_instance
 
                 with patch("app.writer.routers.generate.settings") as mock_settings:
-                    mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                    mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
 
                     response = client.post(
                         "/api/writer/generate",
@@ -338,7 +338,7 @@ This guide will help you get started with LangChain.
                 MockLLM.return_value = mock_llm_instance
 
                 with patch("app.writer.routers.generate.settings") as mock_settings:
-                    mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                    mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
 
                     response = client.post(
                         "/api/writer/generate",
@@ -376,7 +376,7 @@ Artificial Intelligence agents represent a new paradigm...
             MockLLM.return_value = mock_llm_instance
 
             with patch("app.writer.routers.generate.settings") as mock_settings:
-                mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
 
                 from app.writer.routers.generate import generate_content_core
 
@@ -406,7 +406,7 @@ This is the content of the article without a markdown header.
             MockLLM.return_value = mock_llm_instance
 
             with patch("app.writer.routers.generate.settings") as mock_settings:
-                mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
 
                 from app.writer.routers.generate import generate_content_core
 
@@ -483,7 +483,7 @@ class TestGenerateIntegration:
             MockLLM.return_value = mock_llm_instance
 
             with patch("app.writer.routers.generate.settings") as mock_settings:
-                mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
 
                 # Make generate request
                 response = client.post(
@@ -532,7 +532,7 @@ class TestGenerateIntegration:
                         MockLLM.return_value = mock_llm_instance
 
                         with patch("app.writer.routers.generate.settings") as mock_settings:
-                            mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                            mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
 
                             response = client.post(
                                 "/api/writer/generate",

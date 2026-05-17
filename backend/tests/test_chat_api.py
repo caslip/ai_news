@@ -47,7 +47,7 @@ class TestChatEndpoint:
             MockLLM.return_value = mock_llm_instance
 
             with patch("app.writer.routers.chat.settings") as mock_settings:
-                mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
                 mock_settings.effective_llm_provider = "deepseek"
 
                 response = client.post(
@@ -73,7 +73,7 @@ class TestChatEndpoint:
             MockLLM.return_value = mock_llm_instance
 
             with patch("app.writer.routers.chat.settings") as mock_settings:
-                mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
                 mock_settings.effective_llm_provider = "deepseek"
 
                 response = client.post(
@@ -99,7 +99,7 @@ class TestChatEndpoint:
             MockLLM.return_value = mock_llm_instance
 
             with patch("app.writer.routers.chat.settings") as mock_settings:
-                mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
                 mock_settings.effective_llm_provider = "deepseek"
 
                 # First message
@@ -133,7 +133,7 @@ class TestChatEndpoint:
             MockLLM.return_value = mock_llm_instance
 
             with patch("app.writer.routers.chat.settings") as mock_settings:
-                mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
                 mock_settings.effective_llm_provider = "deepseek"
 
                 response = client.post(
@@ -160,7 +160,7 @@ class TestChatEndpoint:
             MockLLM.return_value = mock_llm_instance
 
             with patch("app.writer.routers.chat.settings") as mock_settings:
-                mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
                 mock_settings.effective_llm_provider = "deepseek"
 
                 response = client.post(
@@ -205,7 +205,7 @@ class TestChatHistoryEndpoint:
             MockLLM.return_value = mock_llm_instance
 
             with patch("app.writer.routers.chat.settings") as mock_settings:
-                mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
                 mock_settings.effective_llm_provider = "deepseek"
 
                 # Start a chat
@@ -284,7 +284,7 @@ class TestChatModelsEndpoint:
         """Test listing available models (should not require auth)."""
         with patch("app.writer.routers.chat.settings") as mock_settings:
             mock_settings.available_models = [
-                "deepseek/deepseek-chat-v3-5:free",
+                "google/gemini-2.0-flash-thinking-exp:free",
                 "anthropic/claude-3.5-sonnet",
                 "openai/gpt-4o"
             ]
@@ -330,7 +330,7 @@ class TestChatStreamingEndpoint:
             MockLLM.return_value = mock_llm_instance
 
             with patch("app.writer.routers.chat.settings") as mock_settings:
-                mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
                 mock_settings.effective_llm_provider = "deepseek"
 
                 response = client.post(
@@ -357,7 +357,7 @@ class TestChatIntegration:
             MockLLM.return_value = mock_llm_instance
 
             with patch("app.writer.routers.chat.settings") as mock_settings:
-                mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
                 mock_settings.effective_llm_provider = "deepseek"
 
                 # 1. Create a new session
@@ -398,7 +398,7 @@ class TestChatIntegration:
             MockLLM.return_value = mock_llm_instance
 
             with patch("app.writer.routers.chat.settings") as mock_settings:
-                mock_settings.default_model = "deepseek/deepseek-chat-v3-5:free"
+                mock_settings.default_model = "google/gemini-2.0-flash-thinking-exp:free"
                 mock_settings.effective_llm_provider = "deepseek"
 
                 # Create two separate sessions

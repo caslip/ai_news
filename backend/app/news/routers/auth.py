@@ -15,6 +15,7 @@ from app.news.schemas.user import (
     TokenResponse,
 )
 from app.services.auth import AuthService, get_github_oauth_service, OAuthProvider
+from app.models.user import UserRole
 from app.config import settings
 
 router = APIRouter()
@@ -67,13 +68,30 @@ async def require_admin(
     auth_service: AuthService = Depends(get_auth_service),
 ) -> UserResponse:
     """Require admin role"""
-    user = await get_current_user(token, auth_service)
-    if user.role != "admin":
+    if token is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user = auth_service.get_current_user(token)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required"
+            detail="User account is disabled",
         )
-    return user
+    if user.role != UserRole.admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return UserResponse.model_validate(user)
 
 
 def _set_sso_cookie(response: Response, access_token: str) -> None:

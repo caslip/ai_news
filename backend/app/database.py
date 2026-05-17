@@ -36,4 +36,5 @@ def init_db():
     from app.models import User, Source, Article, Bookmark, Tag, Strategy, MonitorConfig, Paper  # noqa
     from app.models.writer import GeneratedContent, WriterTemplate  # noqa
     from app.models.draft import Draft  # noqa
+    from app.models.article import Article  # noqa
     Base.metadata.create_all(bind=engine)

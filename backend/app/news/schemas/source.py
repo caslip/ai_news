@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
@@ -41,6 +41,8 @@ class SourceUpdate(BaseModel):
 
 
 class SourceResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     name: str
     type: SourceType
@@ -52,9 +54,6 @@ class SourceResponse(BaseModel):
     created_by: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
 
 
 class SourceTestResponse(BaseModel):

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
@@ -26,6 +26,8 @@ class ArticleUpdate(BaseModel):
 
 
 class ArticleResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     source_id: Optional[str] = None
     source_name: Optional[str] = None
@@ -45,9 +47,6 @@ class ArticleResponse(BaseModel):
     published_at: Optional[datetime] = None
     created_at: datetime
     is_bookmarked: bool = False
-
-    class Config:
-        from_attributes = True
 
 
 class ArticleListResponse(BaseModel):

@@ -5,7 +5,7 @@ Monitor 配置 Schema
 此文件保留用于向后兼容，将在后续版本中删除。
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, Dict, Any
 from datetime import datetime
 
@@ -37,5 +37,4 @@ class MonitorConfigResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

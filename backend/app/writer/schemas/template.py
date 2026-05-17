@@ -1,7 +1,7 @@
 """
 Writer Template Schemas - Pydantic models for Template API
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 
 
@@ -17,8 +17,7 @@ class TemplateResponse(BaseModel):
     use_count: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TemplateListResponse(BaseModel):
