@@ -1,6 +1,5 @@
 import axios, { AxiosError } from "axios";
 import { useAuthStore } from "@/stores/authStore";
-import { useRouter } from "next/navigation";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
 
@@ -258,7 +257,6 @@ apiClient.interceptors.response.use(
       return Promise.reject(error);
     }
     if (error.response?.status === 401) {
-      const router = useRouter;
       try {
         const { useAuthStore } = require("@/stores/authStore");
         useAuthStore.getState().logout();

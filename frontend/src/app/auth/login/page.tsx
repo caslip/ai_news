@@ -37,7 +37,6 @@ export default function LoginPage() {
           push_config: {},
           created_at: "",
         };
-        document.cookie = `ai_sso_token=${token}; path=/; SameSite=Lax; max-age=${7 * 24 * 60 * 60}`;
         useAuthStore.setState({ token, user, isAuthenticated: true });
       }
 
@@ -48,32 +47,15 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
-    const returnTo = new URLSearchParams(window.location.search).get("returnTo");
     const success = await login(email, password);
     if (success) {
-      if (returnTo) {
-        const { token, user } = useAuthStore.getState();
-        const params = new URLSearchParams({ token: token || "", returnTo });
-        if (user) {
-          params.set("userId", user.id);
-          params.set("email", user.email);
-          params.set("nickname", user.nickname);
-          params.set("role", user.role);
-          if (user.avatar_url) params.set("avatar_url", user.avatar_url);
-        }
-        window.location.href = `${returnTo}?${params.toString()}`;
-      } else {
-        router.push("/");
-      }
+      router.push("/");
     }
   };
 
   const handleGitHubLogin = () => {
-    const returnTo = new URLSearchParams(window.location.search).get("returnTo");
-    const callbackUrl = returnTo
-      ? `${window.location.origin}/auth/login?returnTo=${encodeURIComponent(returnTo)}`
-      : `${window.location.origin}/auth/login`;
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    const callbackUrl = `${window.location.origin}/auth/login`;
     window.location.href = `${apiUrl}/api/auth/oauth/github?callback=${encodeURIComponent(callbackUrl)}`;
   };
 

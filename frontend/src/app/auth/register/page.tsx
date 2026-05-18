@@ -43,23 +43,9 @@ export default function RegisterPage() {
       return;
     }
 
-    const returnTo = new URLSearchParams(window.location.search).get("returnTo");
     const success = await register(email, password, nickname);
     if (success) {
-      if (returnTo) {
-        const { token, user } = useAuthStore.getState();
-        const params = new URLSearchParams({ token: token || "", returnTo });
-        if (user) {
-          params.set("userId", user.id);
-          params.set("email", user.email);
-          params.set("nickname", user.nickname);
-          params.set("role", user.role);
-          if (user.avatar_url) params.set("avatar_url", user.avatar_url);
-        }
-        window.location.href = `${returnTo}?${params.toString()}`;
-      } else {
-        router.push("/");
-      }
+      router.push("/");
     }
   };
 

@@ -9,39 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, User as LucideUser, Mail, ArrowLeft } from "lucide-react";
-import apiClient from "@/lib/api";
 import { useAuthStore, type User } from "@/stores/authStore";
-
-const NEWS_REGISTER_URL = process.env.NEXT_PUBLIC_NEWS_URL || "http://localhost:3001";
-const WRITER_URL = process.env.NEXT_PUBLIC_WRITER_URL || "http://localhost:3002";
-
-function parseUserFromParams(): Record<string, string> {
-  const params = new URLSearchParams(window.location.search);
-  const id = params.get("userId") || params.get("id") || "";
-  return {
-    id,
-    email: params.get("email") || "",
-    nickname: params.get("nickname") || "",
-    avatar_url: params.get("avatar_url") || "",
-    role: params.get("role") || "user",
-  };
-}
-
-function syncToStore(token: string, userData: Record<string, unknown>) {
-  apiClient.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-  useAuthStore.setState({
-    token,
-    user: userData as unknown as User,
-    isAuthenticated: true,
-    isLoading: false,
-    error: null,
-  });
-}
-
-function redirectToNews() {
-  const returnTo = `${WRITER_URL}/auth/register`;
-  window.location.href = `${NEWS_REGISTER_URL}/auth/register?returnTo=${encodeURIComponent(returnTo)}`;
-}
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -52,36 +20,25 @@ export default function RegisterPage() {
   const [localError, setLocalError] = useState("");
 
   useEffect(() => {
+    // Handle GitHub OAuth callback: token comes back in URL params
     const params = new URLSearchParams(window.location.search);
     const token = params.get("token");
-
     if (token) {
-      syncToStore(token, parseUserFromParams());
+      const userId = params.get("userId") || params.get("id") || "";
+      const userData: User = {
+        id: userId,
+        email: params.get("email") || "",
+        nickname: params.get("nickname") || "",
+        avatar_url: params.get("avatar_url") || undefined,
+        role: (params.get("role") as "user" | "admin") || "user",
+        push_config: {},
+        created_at: "",
+      };
+      useAuthStore.setState({ token, user: userData, isAuthenticated: true });
       window.history.replaceState({}, "", window.location.pathname);
-      window.location.href = "/";
-      return;
+      router.push("/");
     }
-
-    const cookies = document.cookie.split("; ");
-    const ssoEntry = cookies.find((c) => c.startsWith("ai_sso_token="));
-    if (ssoEntry) {
-      const cookieToken = ssoEntry.split("=")[1];
-      apiClient.defaults.headers.common["Authorization"] = `Bearer ${cookieToken}`;
-      apiClient
-        .get("/api/auth/me")
-        .then((res) => {
-          syncToStore(cookieToken, res.data);
-          window.location.href = "/";
-        })
-        .catch(() => {
-          document.cookie = "ai_sso_token=; Max-Age=0; path=/; SameSite=Lax";
-          redirectToNews();
-        });
-      return;
-    }
-
-    redirectToNews();
-  }, []);
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,23 +49,9 @@ export default function RegisterPage() {
       return;
     }
 
-    const returnTo = new URLSearchParams(window.location.search).get("returnTo");
     const success = await register(email, password, nickname);
     if (success) {
-      if (returnTo) {
-        const { token, user } = useAuthStore.getState();
-        const params = new URLSearchParams({ token: token || "", returnTo });
-        if (user) {
-          params.set("userId", user.id);
-          params.set("email", user.email);
-          params.set("nickname", user.nickname);
-          params.set("role", user.role);
-          if (user.avatar_url) params.set("avatar_url", user.avatar_url);
-        }
-        window.location.href = `${returnTo}?${params.toString()}`;
-      } else {
-        router.push("/");
-      }
+      router.push("/");
     }
   };
 

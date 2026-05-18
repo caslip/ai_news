@@ -1,10 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from datetime import timedelta
 from typing import Optional
 import uuid
-import json
 
 from app.database import get_db
 from app.news.schemas.user import (
@@ -94,26 +93,9 @@ async def require_admin(
     return UserResponse.model_validate(user)
 
 
-def _set_sso_cookie(response: Response, access_token: str) -> None:
-    response.set_cookie(
-        key="ai_sso_token",
-        value=access_token,
-        httponly=True,
-        samesite="lax",
-        secure=False,
-        path="/",
-        max_age=settings.access_token_expire_minutes * 60,
-    )
-
-
-def _clear_sso_cookie(response: Response) -> None:
-    response.delete_cookie(key="ai_sso_token", path="/")
-
-
 @router.post("/register", response_model=TokenResponse)
 def register(
     user_data: UserRegisterRequest,
-    response: Response,
     auth_service: AuthService = Depends(get_auth_service),
 ):
     existing_user = auth_service.get_user_by_email(user_data.email)
@@ -132,7 +114,6 @@ def register(
         },
         expires_delta=timedelta(minutes=settings.access_token_expire_minutes),
     )
-    _set_sso_cookie(response, access_token)
 
     return TokenResponse(
         access_token=access_token,
@@ -144,7 +125,6 @@ def register(
 @router.post("/login", response_model=TokenResponse)
 def login(
     login_data: UserLoginRequest,
-    response: Response,
     auth_service: AuthService = Depends(get_auth_service),
 ):
     user = auth_service.authenticate_user(login_data.email, login_data.password)
@@ -163,7 +143,6 @@ def login(
         },
         expires_delta=timedelta(minutes=settings.access_token_expire_minutes),
     )
-    _set_sso_cookie(response, access_token)
 
     return TokenResponse(
         access_token=access_token,
@@ -178,7 +157,6 @@ def logout(
     token: Optional[str] = Depends(oauth2_scheme),
     auth_service: AuthService = Depends(get_auth_service),
 ):
-    _clear_sso_cookie(response)
     return {"message": "Successfully logged out"}
 
 
@@ -228,7 +206,6 @@ def github_oauth_init():
 @router.get("/oauth/github/callback", response_model=TokenResponse)
 async def github_oauth_callback(
     code: str,
-    response: Response,
     state: Optional[str] = None,
     auth_service: AuthService = Depends(get_auth_service),
 ):
@@ -298,7 +275,6 @@ async def github_oauth_callback(
         },
         expires_delta=timedelta(minutes=settings.access_token_expire_minutes),
     )
-    _set_sso_cookie(response, token)
 
     return TokenResponse(
         access_token=token,
@@ -328,7 +304,6 @@ def refresh_token(
         },
         expires_delta=timedelta(minutes=settings.access_token_expire_minutes),
     )
-    _set_sso_cookie(response, new_token)
 
     return TokenResponse(
         access_token=new_token,

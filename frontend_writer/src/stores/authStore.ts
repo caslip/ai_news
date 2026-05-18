@@ -98,6 +98,7 @@ export const useAuthStore = create<AuthState>()(
           // Ignore logout errors
         }
         delete apiClient.defaults.headers.common["Authorization"];
+
         set({
           user: null,
           token: null,
@@ -148,47 +149,10 @@ export const useAuthStore = create<AuthState>()(
       }),
       onRehydrateStorage: () => (state, _error) => {
         useAuthStore.setState({ hasHydrated: true });
-        // 检查 pending_sso_v2（跨平台 SSO 跳转时 Zustand persist 还没写入）
-        try {
-          const pendingRaw = localStorage.getItem("pending_sso_v2");
-          if (pendingRaw) {
-            const pending = JSON.parse(pendingRaw);
-            if (pending.token && pending.user) {
-              localStorage.removeItem("pending_sso_v2");
-              apiClient.defaults.headers.common["Authorization"] = `Bearer ${pending.token}`;
-              useAuthStore.setState({
-                token: pending.token,
-                user: pending.user,
-                isAuthenticated: true,
-              });
-              return;
-            }
-          }
-        } catch {
-          // ignore
-        }
 
         if (state?.token) {
           apiClient.defaults.headers.common["Authorization"] = `Bearer ${state.token}`;
           void state.fetchCurrentUser();
-        } else {
-          const cookies = document.cookie.split("; ");
-          const ssoEntry = cookies.find((c) => c.startsWith("ai_sso_token="));
-          if (ssoEntry) {
-            const cookieToken = ssoEntry.split("=")[1];
-            if (cookieToken) {
-              apiClient.defaults.headers.common["Authorization"] = `Bearer ${cookieToken}`;
-              apiClient.get("/api/auth/me").then((res) => {
-                useAuthStore.setState({
-                  token: cookieToken,
-                  user: res.data,
-                  isAuthenticated: true,
-                });
-              }).catch(() => {
-                document.cookie = "ai_sso_token=; Max-Age=0; path=/; SameSite=Lax";
-              });
-            }
-          }
         }
       },
     }

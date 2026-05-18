@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Home,
   PenLine,
@@ -49,6 +49,7 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle, user }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { logout } = useAuth();
 
   const displayName = user?.nickname?.trim() || user?.email?.split("@")[0] || "用户";
@@ -178,9 +179,11 @@ export function Sidebar({ collapsed, onToggle, user }: SidebarProps) {
               )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
+                className="text-destructive focus:text-destructive cursor-pointer"
                 onSelect={() => {
-                  void logout();
+                  logout().then(() => {
+                    router.push("/auth/login");
+                  });
                 }}
               >
                 退出登录

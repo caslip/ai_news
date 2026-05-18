@@ -141,17 +141,7 @@ export const useAuthStore = create<AuthState>()(
       onRehydrateStorage: () => (state) => {
         if (state?.token) {
           apiClient.defaults.headers.common["Authorization"] = `Bearer ${state.token}`;
-        } else {
-          const cookies = document.cookie.split("; ");
-          const ssoEntry = cookies.find((c) => c.startsWith("ai_sso_token="));
-          if (ssoEntry) {
-            const cookieToken = ssoEntry.split("=")[1];
-            if (cookieToken) {
-              apiClient.defaults.headers.common["Authorization"] = `Bearer ${cookieToken}`;
-              useAuthStore.setState({ token: cookieToken, isAuthenticated: true });
-              state?.fetchCurrentUser();
-            }
-          }
+          void state.fetchCurrentUser();
         }
       },
     }

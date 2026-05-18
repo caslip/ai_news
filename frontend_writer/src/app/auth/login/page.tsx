@@ -9,52 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { GitBranch, Loader2, Mail, ArrowLeft } from "lucide-react";
-import apiClient from "@/lib/api";
 import { useAuthStore, type User } from "@/stores/authStore";
-
-const NEWS_LOGIN_URL = process.env.NEXT_PUBLIC_NEWS_URL || "http://localhost:3001";
-const WRITER_URL = process.env.NEXT_PUBLIC_WRITER_URL || "http://localhost:3002";
-
-function parseUserFromParams(): Record<string, string> {
-  const params = new URLSearchParams(window.location.search);
-  const id = params.get("userId") || params.get("id") || "";
-  return {
-    id,
-    email: params.get("email") || "",
-    nickname: params.get("nickname") || "",
-    avatar_url: params.get("avatar_url") || "",
-    role: params.get("role") || "user",
-  };
-}
-
-function syncToStore(token: string, userData: Record<string, unknown>) {
-  document.cookie = `ai_sso_token=${token}; path=/; SameSite=Lax; max-age=${7 * 24 * 60 * 60}`;
-  apiClient.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-  useAuthStore.setState({
-    token,
-    user: userData as unknown as User,
-    isAuthenticated: true,
-    isLoading: false,
-    error: null,
-  });
-  // 直接写 localStorage，绕过 Zustand persist 异步批写
-  try {
-    const pending = {
-      token,
-      user: userData,
-      ts: Date.now(),
-    };
-    localStorage.setItem("pending_sso_v2", JSON.stringify(pending));
-  } catch {
-    // ignore
-  }
-}
-
-function redirectToNews(errorMsg?: string) {
-  const params = new URLSearchParams({ returnTo: `${WRITER_URL}/auth/login` });
-  if (errorMsg) params.set("error", errorMsg);
-  window.location.href = `${NEWS_LOGIN_URL}/auth/login${params.toString() ? "?" + params.toString() : ""}`;
-}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -63,59 +18,39 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
 
   useEffect(() => {
+    // Handle GitHub OAuth callback: token comes back in URL params
     const params = new URLSearchParams(window.location.search);
     const token = params.get("token");
     if (token) {
-      syncToStore(token, parseUserFromParams());
+      const userId = params.get("userId") || params.get("id") || "";
+      const userData: User = {
+        id: userId,
+        email: params.get("email") || "",
+        nickname: params.get("nickname") || "",
+        avatar_url: params.get("avatar_url") || undefined,
+        role: (params.get("role") as "user" | "admin") || "user",
+        push_config: {},
+        created_at: "",
+      };
+      useAuthStore.setState({ token, user: userData, isAuthenticated: true });
       window.history.replaceState({}, "", window.location.pathname);
       router.push("/");
-      return;
     }
-
-    const cookies = document.cookie.split("; ");
-    const ssoEntry = cookies.find((c) => c.startsWith("ai_sso_token="));
-    if (ssoEntry) {
-      const cookieToken = ssoEntry.split("=")[1];
-      if (cookieToken) {
-        apiClient.defaults.headers.common["Authorization"] = `Bearer ${cookieToken}`;
-        apiClient
-          .get("/api/auth/me")
-          .then((res) => {
-            syncToStore(cookieToken, res.data);
-            router.push("/");
-          })
-          .catch(() => {
-            document.cookie = "ai_sso_token=; Max-Age=0; path=/; SameSite=Lax";
-            redirectToNews();
-          });
-        return;
-      }
-    }
-
-    redirectToNews();
-  }, []);
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
-    const returnTo = new URLSearchParams(window.location.search).get("returnTo");
     const success = await login(email, password);
     if (success) {
-      if (returnTo) {
-        const { token, user } = useAuthStore.getState();
-        const params = new URLSearchParams({ token: token || "", returnTo });
-        if (user) {
-          params.set("userId", user.id);
-          params.set("email", user.email);
-          params.set("nickname", user.nickname);
-          params.set("role", user.role);
-          if (user.avatar_url) params.set("avatar_url", user.avatar_url);
-        }
-        window.location.href = `${returnTo}?${params.toString()}`;
-      } else {
-        router.push("/");
-      }
+      router.push("/");
     }
+  };
+
+  const handleGitHubLogin = () => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001";
+    const callbackUrl = `${window.location.origin}/auth/login`;
+    window.location.href = `${apiUrl}/api/auth/oauth/github?callback=${encodeURIComponent(callbackUrl)}`;
   };
 
   return (
@@ -197,10 +132,7 @@ export default function LoginPage() {
               type="button"
               variant="outline"
               className="w-full"
-              onClick={() => {
-                const returnTo = `${WRITER_URL}/auth/login`;
-                window.location.href = `${NEWS_LOGIN_URL}/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
-              }}
+              onClick={handleGitHubLogin}
               disabled={isLoading}
             >
               <GitBranch className="mr-2 h-4 w-4" />
