@@ -14,6 +14,41 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
+def get_user_api_key(user_id: str, provider: str) -> Optional[str]:
+    """
+    Get user's API key from database for the specified provider.
+    Returns the decrypted API key or None if not found.
+    """
+    try:
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        
+        from app.config import settings as app_settings
+        engine = create_engine(app_settings.database_url)
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        db = SessionLocal()
+        
+        try:
+            from app.models.api_key import ApiKey
+            from app.services.encryption import get_encryption_service
+            
+            api_key_record = db.query(ApiKey).filter(
+                ApiKey.user_id == user_id,
+                ApiKey.provider == provider,
+                ApiKey.is_active == True
+            ).first()
+            
+            if api_key_record:
+                encryption_service = get_encryption_service()
+                return encryption_service.decrypt(api_key_record.encrypted_key)
+            return None
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"Failed to get user API key from database: {e}")
+        return None
+
+
 class LLMService:
     """
     Unified LLM service using LangChain.
@@ -48,7 +83,7 @@ class LLMService:
         "deepseek-coder": "deepseek",
     }
     
-    def __init__(self, model: Optional[str] = None, provider: Optional[str] = None):
+    def __init__(self, model: Optional[str] = None, provider: Optional[str] = None, user_id: Optional[str] = None):
         """
         Initialize LLM service.
         
@@ -57,14 +92,16 @@ class LLMService:
                    If provider is specified, uses provider's default model.
             provider: Optional provider override. If not provided, infers from model
                      or uses config's llm_provider. Options: "deepseek", "openrouter", "openai"
+            user_id: Optional user ID to fetch user-specific API key from database.
         """
         self._model = model
         self._provider = provider
+        self._user_id = user_id
         
         # Determine effective provider
         if provider:
             # Validate provider
-            valid_providers = ["deepseek", "openrouter", "openai"]
+            valid_providers = ["deepseek", "openrouter", "openai", "moonshot", "minimax", "gemini", "anthropic"]
             if provider not in valid_providers:
                 logger.warning(f"Invalid provider '{provider}', defaulting to 'deepseek'")
                 self.provider = "deepseek"
@@ -85,43 +122,75 @@ class LLMService:
         else:
             self.model = settings.openrouter_model
         
-        logger.info(f"LLM: {self.model} via {self.provider}")
+        logger.info(f"LLM: {self.model} via {self.provider}, user_id={user_id}")
+    
+    def _get_api_key(self) -> str:
+        """Get API key - first try user-specific key, then fall back to global config."""
+        # Try user-specific API key first
+        if self._user_id:
+            user_key = get_user_api_key(self._user_id, self.provider)
+            if user_key:
+                logger.info(f"Using user-specific API key for {self.provider}")
+                return user_key
+        
+        # Fall back to global config
+        if self.provider == "deepseek":
+            return settings.deepseek_api_key
+        elif self.provider == "openai":
+            return settings.openai_api_key
+        elif self.provider == "openrouter":
+            return settings.openrouter_api_key
+        elif self.provider == "moonshot":
+            return settings.openai_api_key  # Moonshot uses OpenAI-compatible API
+        elif self.provider == "minimax":
+            return settings.openai_api_key  # MiniMax uses OpenAI-compatible API
+        elif self.provider == "gemini":
+            return settings.openai_api_key  # Gemini can use OpenAI-compatible API
+        elif self.provider == "anthropic":
+            return settings.openai_api_key  # Anthropic uses different API
+        
+        raise ValueError(f"Unknown provider: {self.provider}")
+    
+    def _get_base_url(self) -> Optional[str]:
+        """Get base URL for the provider."""
+        if self.provider == "deepseek":
+            return settings.deepseek_base_url
+        elif self.provider == "kimi":
+            return "https://api.moonshot.cn/v1"
+        elif self.provider == "minimax":
+            return "https://api.minimax.chat/v1"
+        elif self.provider == "openrouter":
+            return "https://openrouter.ai/api/v1"
+        elif self.provider == "gemini":
+            return "https://generativelanguage.googleapis.com/v1beta"
+        elif self.provider == "anthropic":
+            return "https://api.anthropic.com/v1"
+        return None  # OpenAI and others use default base URL
     
     def _get_llm(self, streaming: bool = False, **kwargs):
         """Get the appropriate LLM instance based on provider."""
-        if self.provider == "deepseek":
-            if not settings.deepseek_api_key:
-                raise ValueError("DeepSeek API key not configured. Set DEEPSEEK_API_KEY in environment.")
-            return ChatOpenAI(
-                model=self.model,
-                api_key=settings.deepseek_api_key,
-                base_url=settings.deepseek_base_url,
-                streaming=streaming,
-                **kwargs
-            )
-        elif self.provider == "openai":
-            if not settings.openai_api_key:
-                raise ValueError("OpenAI API key not configured. Set OPENAI_API_KEY in environment.")
-            return ChatOpenAI(
-                model=self.model,
-                api_key=settings.openai_api_key,
-                streaming=streaming,
-                **kwargs
-            )
-        else:  # openrouter
-            if not settings.openrouter_api_key:
-                raise ValueError("OpenRouter API key not configured. Set OPENROUTER_API_KEY in environment.")
-            return ChatOpenAI(
-                model=self.model,
-                api_key=settings.openrouter_api_key,
-                base_url="https://openrouter.ai/api/v1",
-                streaming=streaming,
-                extra_headers={
-                    "HTTP-Referer": "https://ai-news-aggregator",
-                    "X-Title": "AI News Aggregator Writer",
-                },
-                **kwargs
-            )
+        api_key = self._get_api_key()
+        
+        if not api_key:
+            raise ValueError(f"{self.provider} API key not configured. Please add it in settings.")
+        
+        base_url = self._get_base_url()
+        
+        extra_headers = {}
+        if self.provider == "openrouter":
+            extra_headers = {
+                "HTTP-Referer": "https://ai-news-aggregator",
+                "X-Title": "AI News Aggregator Writer",
+            }
+        
+        return ChatOpenAI(
+            model=self.model,
+            api_key=api_key,
+            base_url=base_url,
+            streaming=streaming,
+            extra_headers=extra_headers if extra_headers else None,
+            **kwargs
+        )
     
     async def ainvoke(self, messages: list[dict], **kwargs) -> str:
         """

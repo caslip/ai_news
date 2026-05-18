@@ -176,6 +176,7 @@ async def generate_content_core(
     length: str,
     topic: Optional[str] = None,
     model: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> tuple[str, str, int]:
     """
     Core generation logic using LangChain LLMService.
@@ -187,10 +188,11 @@ async def generate_content_core(
     model = model or settings.default_model
     
     # Use provider-based initialization when no specific model is given
+    # Pass user_id to fetch user-specific API key from database
     if model == settings.default_model:
-        llm = LLMService(provider=settings.effective_llm_provider)
+        llm = LLMService(provider=settings.effective_llm_provider, user_id=user_id)
     else:
-        llm = LLMService(model=model)
+        llm = LLMService(model=model, user_id=user_id)
     
     generated_text = await llm.ainvoke([
         {"role": "user", "content": prompt}
@@ -284,6 +286,7 @@ async def generate_content(
             tone=request.tone,
             length=request.length,
             topic=request.topic,
+            user_id=current_user.id,
         )
         
         # Update draft

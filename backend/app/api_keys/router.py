@@ -199,6 +199,7 @@ async def delete_api_key(
 async def test_api_key(
     data: ApiKeyTestRequest,
     current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ):
     """Test if an API key is valid by making a simple request"""
     if not is_valid_provider(data.provider):
@@ -207,17 +208,38 @@ async def test_api_key(
             detail=f"Invalid provider: {data.provider}",
         )
     
+    # Get or use the API key
+    if data.api_key:
+        # Test the provided new key (before saving)
+        api_key_to_test = data.api_key
+    else:
+        # Test the stored key for this provider
+        encryption_service = get_encryption_service()
+        api_key_record = db.query(ApiKey).filter(
+            ApiKey.user_id == current_user.id,
+            ApiKey.provider == data.provider,
+            ApiKey.is_active == True
+        ).first()
+        
+        if not api_key_record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No active API key found for provider '{data.provider}'",
+            )
+        
+        api_key_to_test = encryption_service.decrypt(api_key_record.encrypted_key)
+    
     provider_config = get_provider(data.provider)
     
     try:
         # Make a simple test request
         async with httpx.AsyncClient(timeout=30.0) as client:
-            headers = {"Authorization": f"Bearer {data.api_key}"}
+            headers = {"Authorization": f"Bearer {api_key_to_test}"}
             
             # Prepare request based on provider
             if data.provider == "anthropic":
                 # Anthropic requires specific headers
-                headers["x-api-key"] = data.api_key
+                headers["x-api-key"] = api_key_to_test
                 headers["anthropic-version"] = "2023-06-01"
                 response = await client.post(
                     f"{provider_config['base_url']}/messages",
@@ -232,8 +254,8 @@ async def test_api_key(
                 # Gemini uses a different endpoint format
                 response = await client.post(
                     f"{provider_config['base_url']}/models/{provider_config['models'][0]}:generateContent",
-                    headers={"Authorization": f"Bearer {data.api_key}"},
-                    params={"key": data.api_key},
+                    headers={"Authorization": f"Bearer {api_key_to_test}"},
+                    params={"key": api_key_to_test},
                     json={"contents": [{"parts": [{"text": "Hi"}]}]},
                 )
             else:

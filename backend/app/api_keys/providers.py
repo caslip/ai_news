@@ -13,8 +13,8 @@ PROVIDERS = {
         "website": "https://platform.deepseek.com",
         "description": "DeepSeek - 中国领先的 AI 大模型服务商",
     },
-    "moonshot": {
-        "id": "moonshot",
+    "kimi": {
+        "id": "kimi",
         "name": "Kimi",
         "base_url": "https://api.moonshot.cn/v1",
         "models": ["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"],

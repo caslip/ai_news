@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   getDrafts,
   getDraft,
@@ -76,6 +77,9 @@ export function useGenerateContent() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["drafts"] });
       void queryClient.invalidateQueries({ queryKey: ["writer-stats"] });
+    },
+    onError: (error) => {
+      toast.error(error.message || "生成失败，请重试");
     },
   });
 }

@@ -54,8 +54,8 @@ class ApiKeyListResponse(BaseModel):
 
 class ApiKeyTestRequest(BaseModel):
     """Schema for testing an API key"""
-    provider: str
-    api_key: str
+    provider: str = Field(..., description="Provider identifier (required)")
+    api_key: Optional[str] = Field(None, description="Optional: test a new key before saving. If not provided, tests the stored key for this provider")
 
 
 class ApiKeyTestResponse(BaseModel):

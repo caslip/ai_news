@@ -42,6 +42,7 @@ import {
   EyeOff,
   Loader2,
 } from "lucide-react";
+import { apiClient } from "@/lib/api";
 
 const STYLE_OPTIONS = [
   { value: "technical", label: "技术解读" },
@@ -82,7 +83,7 @@ interface ApiKeyInfo {
   provider: string;
   masked_key: string;
   label?: string;
-  status: "configured" | "error";
+  is_active: boolean;
   created_at?: string;
 }
 
@@ -92,7 +93,6 @@ interface ProviderCardProps {
   logo: string;
   color: string;
   status: ApiKeyStatus;
-  maskedKey?: string;
   onAdd: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -106,7 +106,6 @@ function ProviderCard({
   logo,
   color,
   status,
-  maskedKey,
   onAdd,
   onEdit,
   onDelete,
@@ -115,6 +114,7 @@ function ProviderCard({
 }: ProviderCardProps) {
   const isConfigured = status === "configured";
   const isError = status === "error";
+  const isTestingStatus = status === "testing" || isTesting;
 
   return (
     <div
@@ -122,6 +122,7 @@ function ProviderCard({
         relative p-4 rounded-lg border transition-all duration-200
         ${isConfigured ? "bg-card border-border" : "bg-card/50 border-border/50"}
         ${isError ? "border-destructive/50 bg-destructive/5" : ""}
+        ${isTestingStatus ? "border-primary/50 bg-primary/5" : ""}
         hover:border-primary/30 hover:shadow-sm
       `}
     >
@@ -130,7 +131,11 @@ function ProviderCard({
         <div
           className={`w-10 h-10 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center text-xl shadow-sm`}
         >
-          {logo}
+          {isTestingStatus ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            logo
+          )}
         </div>
         <div className="flex-1 min-w-0">
           <h4 className="font-medium text-sm truncate">{name}</h4>
@@ -141,22 +146,17 @@ function ProviderCard({
                   ? "bg-green-500"
                   : isError
                   ? "bg-destructive"
+                  : isTestingStatus
+                  ? "bg-primary animate-pulse"
                   : "bg-muted-foreground/30"
               }`}
             />
             <span className="text-xs text-muted-foreground">
-              {isConfigured ? "已配置" : isError ? "配置错误" : "未配置"}
+              {isConfigured ? "已配置" : isError ? "配置错误" : isTestingStatus ? "测试中..." : "未配置"}
             </span>
           </div>
         </div>
       </div>
-
-      {/* Masked Key */}
-      {isConfigured && maskedKey && (
-        <p className="text-xs text-muted-foreground font-mono mb-3 truncate">
-          {maskedKey}
-        </p>
-      )}
 
       {/* Actions */}
       <div className="flex gap-1.5">
@@ -307,15 +307,17 @@ function AddKeyDialog({
             {mode === "add" ? "添加 API 密钥" : "更新 API 密钥"}
           </DialogTitle>
           <DialogDescription>
-            {mode === "add"
+            {initialProvider
+              ? `为 ${PROVIDERS.find((p) => p.id === initialProvider)?.name} 添加 API 密钥`
+              : mode === "add"
               ? "选择一个 AI 服务提供商并输入您的 API 密钥"
               : "输入新的 API 密钥来更新现有配置"}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {/* Provider Selection */}
-          {mode === "add" && (
+          {/* Provider Selection - Hidden when provider is pre-selected */}
+          {!initialProvider ? (
             <div className="space-y-2">
               <Label htmlFor="provider">AI 服务提供商</Label>
               <Select
@@ -336,6 +338,14 @@ function AddKeyDialog({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label>AI 服务提供商</Label>
+              <div className="flex items-center gap-2 px-3 py-2 bg-muted/50 rounded-md border border-border/50 text-sm">
+                {PROVIDERS.find((p) => p.id === initialProvider)?.logo}
+                <span>{PROVIDERS.find((p) => p.id === initialProvider)?.name}</span>
+              </div>
             </div>
           )}
 
@@ -528,14 +538,13 @@ export default function SettingsPage() {
   const [editProvider, setEditProvider] = useState<ProviderId | undefined>();
   const [deleteProvider, setDeleteProvider] = useState<{ id: ProviderId; name: string } | null>(null);
 
-  // Fetch API keys
+  // Fetch API keys from backend
   const fetchApiKeys = useCallback(async () => {
     setIsLoadingKeys(true);
     try {
-      const response = await fetch("/api/api-keys");
-      if (response.ok) {
-        const data = await response.json();
-        setApiKeys(data.api_keys || []);
+      const response = await apiClient.get("/api/api-keys");
+      if (response.data) {
+        setApiKeys(response.data.items || []);
       }
     } catch {
       console.error("Failed to fetch API keys");
@@ -552,22 +561,14 @@ export default function SettingsPage() {
     if (testingProvider === providerId) return "testing";
     const key = apiKeys.find((k) => k.provider === providerId);
     if (!key) return "unconfigured";
-    return key.status;
-  };
-
-  const getMaskedKey = (providerId: string): string | undefined => {
-    const key = apiKeys.find((k) => k.provider === providerId);
-    return key?.masked_key;
+    // API response has is_active, map to configured/error based on is_active
+    return key.is_active ? "configured" : "error";
   };
 
   const handleAddKey = async (provider: ProviderId, apiKey: string, label?: string) => {
-    const response = await fetch("/api/api-keys", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ provider, api_key: apiKey, label }),
-    });
+    const response = await apiClient.post("/api/api-keys", { provider, api_key: apiKey, label });
 
-    if (!response.ok) {
+    if (response.status !== 201 && response.status !== 200) {
       throw new Error("Failed to add API key");
     }
 
@@ -575,48 +576,48 @@ export default function SettingsPage() {
   };
 
   const handleUpdateKey = async (provider: ProviderId, apiKey: string) => {
-    // Delete first then add (simplified approach)
-    await fetch(`/api/api-keys/${provider}`, { method: "DELETE" });
-    await handleAddKey(provider, apiKey);
+    // Check if key already exists
+    const existingKey = apiKeys.find((k) => k.provider === provider);
+    
+    if (existingKey) {
+      // Key exists, use PATCH to update
+      await apiClient.patch(`/api/api-keys/${provider}`, { api_key: apiKey });
+    } else {
+      // Key doesn't exist, use POST to create
+      await apiClient.post("/api/api-keys", { provider, api_key: apiKey });
+    }
     setEditProvider(undefined);
+    await fetchApiKeys();
   };
 
   const handleDeleteKey = async (provider: ProviderId) => {
-    const response = await fetch(`/api/api-keys/${provider}`, {
-      method: "DELETE",
-    });
-
-    if (!response.ok) {
-      throw new Error("Failed to delete API key");
-    }
-
+    await apiClient.delete(`/api/api-keys/${provider}`);
     await fetchApiKeys();
   };
 
   const handleTestKey = async (provider: ProviderId) => {
-    const apiKey = apiKeys.find((k) => k.provider === provider);
-    if (!apiKey) return;
-
     setTestingProvider(provider);
 
     try {
-      const response = await fetch("/api/api-keys/test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, api_key: apiKey.masked_key.replace(/\*/g, "") }),
+      // 测试已存储的密钥，后端会自动从数据库解密并测试
+      const response = await apiClient.post("/api/api-keys/test", {
+        provider,
       });
 
-      const result = await response.json();
+      const result = response.data;
 
       if (result.success) {
         toast.success(`${PROVIDERS.find((p) => p.id === provider)?.name} 连接成功`);
       } else {
         toast.error(`测试失败: ${result.message}`);
       }
-
-      await fetchApiKeys();
-    } catch {
-      toast.error("测试请求失败");
+    } catch (error) {
+      // 提取 axios 错误信息
+      const axiosError = error as { response?: { data?: { detail?: string; message?: string } } };
+      const errorMsg = axiosError.response?.data?.detail 
+        || axiosError.response?.data?.message 
+        || "测试请求失败";
+      toast.error(errorMsg);
     } finally {
       setTestingProvider(null);
     }
@@ -627,16 +628,19 @@ export default function SettingsPage() {
     apiKey: string
   ): Promise<{ success: boolean; message: string }> => {
     try {
-      const response = await fetch("/api/api-keys/test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, api_key: apiKey }),
+      const response = await apiClient.post("/api/api-keys/test", {
+        provider,
+        api_key: apiKey,
       });
 
-      const result = await response.json();
-      return result;
-    } catch {
-      return { success: false, message: "测试请求失败" };
+      return response.data;
+    } catch (error) {
+      // 提取 axios 错误信息
+      const axiosError = error as { response?: { data?: { detail?: string; message?: string } } };
+      const errorMsg = axiosError.response?.data?.detail 
+        || axiosError.response?.data?.message 
+        || "测试请求失败";
+      return { success: false, message: errorMsg };
     }
   };
 
@@ -776,10 +780,9 @@ export default function SettingsPage() {
                   logo={provider.logo}
                   color={provider.color}
                   status={getKeyStatus(provider.id)}
-                  maskedKey={getMaskedKey(provider.id)}
                   isTesting={testingProvider === provider.id}
                   onAdd={() => {
-                    setEditProvider(undefined);
+                    setEditProvider(provider.id);
                     setAddKeyDialogOpen(true);
                   }}
                   onEdit={() => {
