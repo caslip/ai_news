@@ -224,7 +224,7 @@ export const generateContent = async (data: GenerateRequest): Promise<GenerateRe
  */
 export const getWriterStats = async (): Promise<WriterStats> => {
   try {
-    const response = await apiClient.get<WriterStats>("/api/writer/stats");
+    const response = await apiClient.get<WriterStats>("/api/writer/drafts/stats");
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
