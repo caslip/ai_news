@@ -34,7 +34,6 @@ const navItems = [
   { href: "/editor", label: "文本编辑器", icon: FileEdit },
   { href: "/drafts", label: "草稿箱", icon: FileText },
   { href: "/templates", label: "模板库", icon: LayoutTemplate },
-  { href: "/settings", label: "设置", icon: Settings },
 ];
 
 interface SidebarProps {
@@ -167,7 +166,10 @@ export function Sidebar({ collapsed, onToggle, user }: SidebarProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuItem asChild>
-                <Link href="/settings">个人设置</Link>
+                <Link href="/settings" className="flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  个人设置
+                </Link>
               </DropdownMenuItem>
               {isAdmin && (
                 <DropdownMenuItem asChild>

@@ -8,6 +8,7 @@ from app.papers import router as papers_router
 from app.logging_config import setup_logging
 from app.middleware import RequestLoggingMiddleware
 from app.logging.router import router as logging_router
+from app.api_keys.router import router as api_keys_router
 
 # 初始化日志配置
 setup_logging(service_name="ai-news-backend", service_type="api")
@@ -58,6 +59,7 @@ app.include_router(news_router, prefix="/api")
 app.include_router(writer_router, prefix="/api/writer")
 app.include_router(papers_router, prefix="/api/papers", tags=["论文"])
 app.include_router(logging_router, prefix="/api")
+app.include_router(api_keys_router, prefix="/api/api-keys", tags=["API密钥"])
 
 # 添加请求日志中间件
 app.add_middleware(RequestLoggingMiddleware)
@@ -76,5 +78,3 @@ def root():
         "health": "/api/health",
     }
 
-print("--------------------------------")
-print(settings.allowed_origins)
