@@ -50,10 +50,6 @@ export function useAuth() {
     return await fetchCurrentUser();
   }, [fetchCurrentUser]);
 
-  const initiateGitHubOAuth = useCallback((): void => {
-    window.location.href = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001"}/api/auth/oauth/github`;
-  }, []);
-
   return {
     user,
     token,
@@ -64,7 +60,6 @@ export function useAuth() {
     register: handleRegister,
     logout: handleLogout,
     fetchCurrentUser: handleFetchCurrentUser,
-    initiateGitHubOAuth,
     clearError,
   };
 }

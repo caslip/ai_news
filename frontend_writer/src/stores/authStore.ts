@@ -152,7 +152,6 @@ export const useAuthStore = create<AuthState>()(
 
         if (state?.token) {
           apiClient.defaults.headers.common["Authorization"] = `Bearer ${state.token}`;
-          void state.fetchCurrentUser();
         }
       },
     }
