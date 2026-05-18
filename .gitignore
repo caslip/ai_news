@@ -32,7 +32,3 @@ debug.log
 .DS_Store
 Thumbs.db
 .vercel
-
-# Build artifacts
-*.db
-*.tsbuildinfo
