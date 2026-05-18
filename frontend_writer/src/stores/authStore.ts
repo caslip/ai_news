@@ -59,7 +59,15 @@ export const useAuthStore = create<AuthState>()(
           });
           return true;
         } catch (error: any) {
-          const message = error.response?.data?.detail || "Login failed";
+          const data = error.response?.data;
+          let message = "Login failed";
+          if (typeof data?.detail === "string") {
+            message = data.detail;
+          } else if (Array.isArray(data?.detail)) {
+            message = data.detail.map((e: any) => e.msg || JSON.stringify(e)).join("; ");
+          } else if (typeof data?.detail === "object") {
+            message = data.detail.msg || JSON.stringify(data.detail);
+          }
           set({ error: message, isLoading: false });
           return false;
         }
@@ -85,7 +93,15 @@ export const useAuthStore = create<AuthState>()(
           });
           return true;
         } catch (error: any) {
-          const message = error.response?.data?.detail || "Registration failed";
+          const data = error.response?.data;
+          let message = "Registration failed";
+          if (typeof data?.detail === "string") {
+            message = data.detail;
+          } else if (Array.isArray(data?.detail)) {
+            message = data.detail.map((e: any) => e.msg || JSON.stringify(e)).join("; ");
+          } else if (typeof data?.detail === "object") {
+            message = data.detail.msg || JSON.stringify(data.detail);
+          }
           set({ error: message, isLoading: false });
           return false;
         }

@@ -13,7 +13,7 @@ import { useAuthStore, type User } from "@/stores/authStore";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { register, isLoading, error } = useAuthStore();
+  const { register, isLoading, error, clearError } = useAuthStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [nickname, setNickname] = useState("");
@@ -43,9 +43,10 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError("");
+    clearError();
 
-    if (password.length < 6) {
-      setLocalError("密码至少需要 6 个字符");
+    if (password.length < 8) {
+      setLocalError("密码至少需要 8 个字符");
       return;
     }
 
@@ -126,7 +127,7 @@ export default function RegisterPage() {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="至少 6 个字符"
+                  placeholder="至少 8 个字符"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required

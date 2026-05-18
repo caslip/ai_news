@@ -253,7 +253,10 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.config?.url?.includes("/auth/logout")) {
+    // Skip redirect for logout and auth endpoints (login/register)
+    // so error messages are displayed instead of refreshing the page
+    const skipRedirectUrls = ["/auth/logout", "/api/auth/login", "/api/auth/register"];
+    if (skipRedirectUrls.some((url) => error.config?.url?.includes(url))) {
       return Promise.reject(error);
     }
     if (error.response?.status === 401) {
