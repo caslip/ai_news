@@ -261,11 +261,11 @@ apiClient.interceptors.response.use(
         const { useAuthStore } = require("@/stores/authStore");
         useAuthStore.getState().logout();
         if (typeof window !== "undefined") {
-          window.location.href = "/login";
+          window.location.href = "/auth/login";
         }
       } catch {
         if (typeof window !== "undefined") {
-          window.location.href = "/login";
+          window.location.href = "/auth/login";
         }
       }
     }
