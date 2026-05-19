@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from app.news.routers import (
     auth, articles, sources, favorites, strategies,
-    sse, monitor, admin, github,
+    sse, monitor, admin, github, zhihu,
 )
 
 router = APIRouter()
@@ -15,3 +15,4 @@ router.include_router(sse.router, tags=["SSE实时推送"])
 router.include_router(monitor.router, tags=["监控"])
 router.include_router(admin.router, tags=["后台管理"])
 router.include_router(github.router, prefix="/github", tags=["GitHub Trending"])
+router.include_router(zhihu.router, prefix="/zhihu", tags=["知乎问题"])

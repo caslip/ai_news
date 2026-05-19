@@ -102,9 +102,11 @@ export default function GeneratePage() {
         if (result.content) {
           const { generateEditorKey, saveEditorSession } = await import("@/lib/editorSession");
           const key = generateEditorKey();
+          const markdownContent = result.content;
           saveEditorSession(key, {
             title: result.title || "",
-            content: result.content,
+            content: markdownContent,
+            originalMarkdown: markdownContent, // 保留原始 Markdown 用于无损复制
             sourceContent,
             topic,
             style,

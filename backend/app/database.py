@@ -33,7 +33,7 @@ def get_db():
 def init_db():
     """Initialize database tables"""
     # Import models to register them with Base
-    from app.models import User, Source, Article, Bookmark, Tag, Strategy, MonitorConfig, Paper, ApiKey  # noqa
+    from app.models import User, Source, Article, Bookmark, Tag, Strategy, MonitorConfig, Paper, ApiKey, ZhihuQuestion  # noqa
     from app.models.writer import GeneratedContent, WriterTemplate  # noqa
     from app.models.draft import Draft  # noqa
     from app.models.article import Article  # noqa

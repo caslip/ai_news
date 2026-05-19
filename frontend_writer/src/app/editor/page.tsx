@@ -34,10 +34,14 @@ function EditorContent() {
   const [isLoadingSession, setIsLoadingSession] = useState(!!key);
   /** Content set after markdown parsing — empty string = still loading */
   const [initialContent, setInitialContent] = useState("");
-  /** Current editor content (user edits) */
+  /** Current editor content (user edits in HTML format for Tiptap) */
   const [content, setContent] = useState("");
+  /** Original markdown from AI generation — never modified by user edits */
+  const [originalMarkdown, setOriginalMarkdown] = useState("");
   const [title, setTitle] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
+  /** Track if user has made any edits */
+  const [hasEdited, setHasEdited] = useState(false);
 
   // Auth guard
   useEffect(() => {
@@ -63,29 +67,37 @@ function EditorContent() {
       return;
     }
 
+    // 保留原始 Markdown（从 session 加载或使用当前 content）
+    const rawMarkdown = session.originalMarkdown || session.content;
+    setOriginalMarkdown(rawMarkdown);
+
     void markdownToHtml(session.content).then((html) => {
       setTitle(session.title || "");
       setInitialContent(html);
       setContent(html);
+      setHasEdited(false);
       setIsLoadingSession(false);
     });
   }, [key]);
 
   const handleEditorChange = useCallback((html: string) => {
     setContent(html);
+    setHasEdited(true);
   }, []);
 
-  const handleCopy = () => {
-    if (!content) return;
-    const text = content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-    navigator.clipboard.writeText(text);
-    toast.success("已复制到剪贴板");
+  const handleCopy = async () => {
+    // 优先使用原始 Markdown，如果用户有编辑则使用当前编辑内容
+    const markdownToCopy = hasEdited ? content.replace(/<[^>]+>/g, "\n").replace(/\n{3,}/g, "\n\n").trim() : originalMarkdown;
+    if (!markdownToCopy) return;
+    await navigator.clipboard.writeText(markdownToCopy);
+    toast.success(hasEdited ? "已复制当前内容（已编辑）" : "已复制原始 Markdown 格式");
   };
 
   const handleDownload = () => {
     if (!content) return;
     const text = content.replace(/<[^>]+>/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-    const blob = new Blob([`# ${title || "article"}\n\n${text}`], {
+    const markdown = `# ${title || "article"}\n\n${text}`;
+    const blob = new Blob([markdown], {
       type: "text/markdown",
     });
     const url = URL.createObjectURL(blob);
@@ -107,6 +119,7 @@ function EditorContent() {
       saveEditorSession(k, {
         title,
         content: text,
+        originalMarkdown: originalMarkdown || text,
         sourceContent: "",
         topic: "",
         style: "",

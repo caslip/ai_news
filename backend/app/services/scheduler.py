@@ -6,6 +6,7 @@
 
 import logging
 import threading
+from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -13,6 +14,40 @@ logger = logging.getLogger(__name__)
 
 _scheduler = None
 _scheduler_lock = threading.Lock()
+
+
+def check_zhihu_stale():
+    """
+    检查知乎问题数据是否过期，超过 2 小时未更新则输出提醒日志
+    """
+    try:
+        from app.database import SessionLocal
+        from app.services.zhihu_crawler import ZhihuCrawlerService
+
+        db = SessionLocal()
+        try:
+            service = ZhihuCrawlerService(db)
+            last_fetch = service.get_last_fetch_time()
+
+            if last_fetch:
+                hours_since = (datetime.utcnow() - last_fetch).total_seconds() / 3600
+                if hours_since > 2:
+                    logger.warning(
+                        f"[Scheduler] 知乎问题数据已超过 {hours_since:.1f} 小时未更新，"
+                        f"请访问知乎邀请页面重新提取数据"
+                    )
+                else:
+                    logger.info(
+                        f"[Scheduler] 知乎问题数据最新，最后更新于 {hours_since:.1f} 小时前"
+                    )
+            else:
+                logger.warning(
+                    "[Scheduler] 尚未抓取过知乎问题，请访问知乎邀请页面提取数据"
+                )
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"[Scheduler] 检查知乎数据时效失败: {e}")
 
 
 def crawl_all_sources():
@@ -87,6 +122,13 @@ def start_scheduler():
             trigger=IntervalTrigger(hours=1),
             id="hourly_crawl_all",
             name="每小时爬取所有信源",
+            replace_existing=True,
+        )
+        _scheduler.add_job(
+            check_zhihu_stale,
+            trigger=IntervalTrigger(hours=1),
+            id="hourly_check_zhihu",
+            name="每小时检查知乎问题时效",
             replace_existing=True,
         )
         _scheduler.start()

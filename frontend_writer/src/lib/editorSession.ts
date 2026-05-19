@@ -7,7 +7,10 @@
 export interface EditorSession {
   key: string;
   title: string;
+  /** 用户编辑后的内容，始终保持 Markdown 格式 */
   content: string;
+  /** AI 生成的原始 Markdown，不随用户编辑而改变 */
+  originalMarkdown: string;
   sourceContent: string;
   topic: string;
   style: string;
@@ -28,13 +31,20 @@ export function generateEditorKey(): string {
 
 /**
  * Write an editor session to sessionStorage and track it as the last session.
+ * If originalMarkdown is not provided but content is, uses content as originalMarkdown.
+ * This preserves the original AI-generated markdown for lossless copy.
  */
 export function saveEditorSession(key: string, data: Omit<EditorSession, "key" | "createdAt">): void {
   try {
+    // 首次保存时，保留原始 Markdown（不覆盖已保存的 originalMarkdown）
+    const existing = loadEditorSession(key);
+    const originalMarkdown = existing?.originalMarkdown || data.originalMarkdown || data.content;
+
     const session: EditorSession = {
       key,
-      createdAt: new Date().toISOString(),
+      createdAt: existing?.createdAt || new Date().toISOString(),
       ...data,
+      originalMarkdown,
     };
     sessionStorage.setItem(key, JSON.stringify(session));
     sessionStorage.setItem(LAST_KEY_STORAGE, key);
